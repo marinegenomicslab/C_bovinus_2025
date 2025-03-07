@@ -1,42 +1,37 @@
 #### Reference assembly complete ####
 #### HPC ####
-cd $WORK/Workspace/Robert/Cyprinodon/reference
+cd references
 cp K1_1_K2_2/c_0.88/reference.fasta ./Cbovinus_reference.fasta
 
-#Getting samples for Gnobilis
-#Getting a list of samples from the Gambusia analysis
+#Getting data
 cd ../data
-nano Cbovinus_samples.txt
 
-#Pulling this data from Gambusia
-ls -d I* | while read i; do
-echo "Processing $i"
-ls $WORK/Workspace/Robert/Cyprinodon/data/$i | grep -wf Cbovinus_samples.txt > tmp.file
-cat tmp.file | xargs -P 5 -I {} cp $WORK/Workspace/Robert/Cyprinodon/data/$i/{} $i/
-done
+#Trimming data
+cd data
+ls -d I* | while read i; do cd $i; cp -s $WORK/bin/slurm/trim_config.file .; cd ..; done
+ls -d I* | while read i; do while [ $(squeue | grep afields | wc -l) -ge 8 ]; do sleep 60; done; cd $i; sbatch $WORK/bin/slurm/dDocent_trimming.slurm; cd ..; sleep 2; done
 
 #Mapping
 #Making directories
 find ./I* -type d > ../mapping/dirs.txt; cd ../mapping; xargs mkdir -p < dirs.txt; rm dirs.txt
 
-#Mapping data
-#Run on normal nodes, scripted to limit to 8 nodes
+#Mapping reads
 ls | while read i; do cd $i; cp -s ../../data/$i/*.fq.gz .; cp -s ../../reference/Cbovinus_reference.fasta ./reference.fasta; cp -s $WORK/bin/slurm/map_config.file .; cd ..; done
-ls | while read i; do while [ $(squeue | grep afields | wc -l) -ge 8 ]; do sleep 60; done; cd $i; sbatch $WORK/bin/slurm/dDocent_mapping.slurm; cd ..; sleep 5; done
+ls | while read i; do cd $i; sbatch $WORK/bin/slurm/dDocent_mapping.slurm; cd ..; sleep 2; done
 
 #Filtering bam files
-ls | while read i; do while [ $(squeue | grep afields | wc -l) -ge 8 ]; do sleep 60; done; cd $i; sbatch $WORK/bin/slurm/dDocent_bamfiltering.slurm; cd ..; sleep 5; done
+ls | while read i; do cd $i; sbatch $WORK/bin/slurm/dDocent_bamfiltering.slurm; cd ..; sleep 5; done
 
 #Making coverage files for all data
 #Run on normal nodes, scripted to limit to 10 nodes
-ls | while read i; do while [ $(squeue | grep afields | wc -l) -ge 8 ]; do sleep 60; done; cd $i; sbatch $WORK/bin/slurm/dDocent_cov.slurm; cd ..; sleep 5; done
+ls | while read i; do cd $i; sbatch $WORK/bin/slurm/dDocent_cov.slurm; cd ..; sleep 5; done
 
 #Preparing folder for SNP calling
 mkdir ../SNP_calling
 cd ../SNP_calling
 mkdir tmp
 ls ../mapping | while read i; do echo $i; cp -s ../mapping/$i/*.bam* .; rm cat*; done
-ls ../mapping | while read i; do echo $i; cp -s ../mapping/$i/*.cov.stats .; 2done
+ls ../mapping | while read i; do echo $i; cp -s ../mapping/$i/*.cov.stats .; done
 ls ../mapping | while read i; do echo $i; cat ../mapping/$i/mapped.bed >> all_mapped.bed; done
 sbatch $WORK/bin/slurm/dDocent_bed.slurm
 
@@ -52,7 +47,7 @@ ls -d *.node | while read i; do cd $i; cp -s ../../reference/Cbovinus_reference.
 
 #SNP calling on normal nodes, scripted to limit to 8 nodes
 ulimit -s 81920
-ls -d *.node | while read i; do while [ $(squeue | grep afields | awk '$5=="R" {print $0} $5=="PD" {print $0}' | wc -l) -ge 8 ]; do sleep 60; done; cd $i; ulimit -s 81920; sbatch -p jgoldq,normal $WORK/bin/slurm/dDocent_freebayes.slurm; cd ..; sleep 2; done
+ls -d *.node | while read i; do cd $i; ulimit -s 81920; sbatch -p jgoldq,normal $WORK/bin/slurm/dDocent_freebayes.slurm; cd ..; sleep 2; done
 
 #Checking to see if nodes have the correct number of vcf files with data in them
 ls -d *.node | while read i; do echo "checking $i"; cd $i; BEDS=$(ls mapped.*.bed | wc -l);	VCF=$(find . -name "*.vcf" -size +62k | wc -l); if [ $VCF -lt $BEDS ]; then echo $i "did not complete all the vcf files properly"; fi; if [ $(find . -name "*.vcf" | wc -l) -gt $BEDS ]; then echo $i "has too many vcf files present"; fi; cd ..; done
@@ -61,7 +56,7 @@ ls -d *.node | while read i; do echo "checking $i"; cd $i; BEDS=$(ls mapped.*.be
 ls -d *.node | while read i; do echo "checking $i"; cd $i; ls raw.*.vcf | while read j; do VCF=$(head -n1 $j| grep "##" | wc -l); if [ $VCF -eq 0 ]; then echo $i $j "missing complete header"; echo ${i}/${j} >> ../bad.vcf; fi; done; cd ..; done
 
 #Combine all vcfs in each node
-ls -d *.node | while read i; do while [ $(squeue | grep afields | wc -l) -ge 8 ]; do sleep 60; done; cd $i; sbatch $WORK/bin/slurm/dDocent_combine_node.slurm; cd ..; sleep 5; done
+ls -d *.node | while read i; do cd $i; sbatch $WORK/bin/slurm/dDocent_combine_node.slurm; cd ..; sleep 5; done
 
 #Preparing to combine all the vcf files
 mkdir vcf
@@ -74,7 +69,3 @@ done
 
 #Combining all the vcf files
 sbatch $WORK/bin/slurm/dDocent_combine.slurm
-
-#Transfer
-scp TotalRawSNPs.vcf afields@earth.ad.tamucc.edu:/home/afields/Workspace/Robert/Cbovinus/filtering
-scp ../popmap afields@earth.ad.tamucc.edu:/home/afields/Workspace/Robert/Cbovinus/filtering
