@@ -1,20 +1,9 @@
-###### Making a reference from the Cyprinodon for C. bovinus ######
-#### HPC ####
-#Move to the directory
-cd $WORK/Workspace/Robert/Cbovinus/data
-
-## Get Data ##
-#Make a list of the samples from the Gambusia
+###### Making a reference for C. bovinus ######
+#Trimming data
 ```{bash}```
-scp afields@earth.ad.tamucc.edu:/home/afields/Workspace/Robert/Cyprinodon/analysis/Cbovinus_list.txt .
-
-#Copy the files to this data directory
-```{bash}```
-ls -d I* | while read i; do 
-echo "Processing $i"; 
-ls $WORK/Workspace/Robert/Cyprinodon/data/$i | grep -wf Cbovinus_list.txt > tmp.file; 
-cat tmp.file | xargs -P 5 -I {} cp $WORK/Workspace/Robert/Cyprinodon/data/$i/{} $i/; 
-done
+cd data
+ls -d I* | while read i; do cd $i; cp -s $WORK/bin/slurm/trim_config.file .; cd ..; done
+ls -d I* | while read i; do cd $i; sbatch $WORK/bin/slurm/dDocent_trimming.slurm; cd ..; sleep 2; done
 
 #Making subdirectories in the reference directory
 ```{bash}```
@@ -33,121 +22,132 @@ nano test_set.txt
 #Copy files to the directories
 ```{bash}```
 ls *_set.txt | while read i; do
-echo "Processing $i"
-SET=$(echo $i | cut -f1 -d".")
-cd $SET
-cat ../$i | while read j; do
-cp ../../data/I*/${j}*.fq.gz .
-done
-cd ..
+	echo "Processing $i"
+	SET=$(echo $i | cut -f1 -d".")
+	cd $SET
+	cat ../$i | while read j; do
+		cp ../../data/I*/${j}*.fq.gz .
+	done
+	cd ..
 done
 
 #Making the reference directories
 ```{bash}```
 ls -d K1* | while read i; do
-echo "making" $i
-K1=$(echo $i | sed -e 's/_/\t/g' | cut -f2)
-K2=$(echo $i | sed -e 's/_/\t/g' | cut -f4)
-cd $i
-for j in $(seq 0.8 0.02 0.98); do
-mkdir c_${j}
-cd c_${j}
-cp -s ../../ref_set/*.fq.gz .
-sed "s/0.80/$j/g" $WORK/bin/slurm/ref_config.file | awk -v var1="$K1" -v var2="$K2" '$0 ~ /K1/{print $0; getline; gsub($0,var1)}$0 ~ /K2/{print $0; getline; gsub($0,var2)}{print $0}' > ref_config.file
-cd ..
-done
-cd ..
+	echo "making" $i
+	K1=$(echo $i | sed -e 's/_/\t/g' | cut -f2)
+	K2=$(echo $i | sed -e 's/_/\t/g' | cut -f4)
+	cd $i
+	for j in $(seq 0.8 0.02 0.98); do
+		mkdir c_${j}
+		cd c_${j}
+		cp -s ../../ref_set/*.fq.gz .
+		sed "s/0.80/$j/g" $WORK/bin/slurm/ref_config.file | awk -v var1="$K1" -v var2="$K2" '$0 ~ /K1/{print $0; getline; gsub($0,var1)}$0 ~ /K2/{print $0; getline; gsub($0,var2)}{print $0}' > ref_config.file
+		cd ..
+	done
+	cd ..
 done
 
 #Config file check
+```{bash}```
 grep -rn -A1 Clustering_Similarity K1_1_K2_2/c_0.*/ref_config.file
 
 #For making the reference config files if they were not right in the last loop
 ##Not used unless making the directories goes wrong##
+```{bash}```
 ls -d K1* | while read i; do
-K1=$(echo $i | sed -e 's/_/\t/g' | cut -f2)
-K2=$(echo $i | sed -e 's/_/\t/g' | cut -f4)
-for j in $(seq 0.8 0.02 0.98); do
-sed "s/0.80/$j/g" ~/bin/ref_config.file | awk -v var1="$K1" -v var2="$K2" '$0 ~ /K1/{print $0; getline; gsub($0,var1)}$0 ~ /K2/{print $0; getline; gsub($0,var2)}{print $0}' > ${i}/c_${j}/ref_config.file
-done
+	K1=$(echo $i | sed -e 's/_/\t/g' | cut -f2)
+	K2=$(echo $i | sed -e 's/_/\t/g' | cut -f4)
+	for j in $(seq 0.8 0.02 0.98); do
+		sed "s/0.80/$j/g" ~/bin/ref_config.file | awk -v var1="$K1" -v var2="$K2" '$0 ~ /K1/{print $0; getline; gsub($0,var1)}$0 ~ /K2/{print $0; getline; gsub($0,var2)}{print $0}' > ${i}/c_${j}/ref_config.file
+	done
 done
 
 #Removing the c-value directories if necessary
 ##Not used unless making the directories goes wrong##
+```{bash}```
 ls -d K1* | while read i; do 
-cd $i
-rm -r *
-cd ..
+	cd $i
+	rm -r *
+	cd ..
 done
 
 #Running the reference building
+```{bash}```
 ls -d K1* | while read i; do
-cd $i
-for j in $(seq 0.8 0.02 0.98); do
-cd c_${j}
-while [ $(squeue -n dDocent_ref | grep afields | wc -l) -ge 8 ]; do sleep 30; done
-echo "starting" $i $j
-sbatch -p jgoldq,normal $WORK/bin/slurm/dDocent_ref_assembly.slurm
-sleep 2
-cd ..; done
-cd ..; done
+	cd $i
+	for j in $(seq 0.8 0.02 0.98); do
+		cd c_${j}
+		echo "starting" $i $j
+		sbatch -p jgoldq,normal $WORK/bin/slurm/dDocent_ref_assembly.slurm
+		sleep 2
+		cd ..
+  	done
+	cd ..
+done
 
 #Checking if references built
+```{bash}```
 ls -d K1_*_K2_*/c_* | while read i; do if [ ! -s $i/reference.fasta ]; then echo "$i missing reference"; fi; done
 
 #Running on ones without a reference
 #Does not need to run if all assemblies are good
+```{bash}```
 ls -d K1_*_K2_*/c_* | while read i; do 
-if [ ! -s $i/reference.fasta ]; then
-echo "restarting $i"
-cd $i
-sbatch $WORK/bin/slurm/dDocent_ref_assembly.slurm
-cd ../..
-sleep 2
-fi
+	if [ ! -s $i/reference.fasta ]; then
+		echo "restarting $i"
+		cd $i
+		sbatch $WORK/bin/slurm/dDocent_ref_assembly.slurm
+		cd ../..
+		sleep 2
+	fi
 done
 
 #Removing extraneous files from reference making and preparing for mapping
+```{bash}```
 mkdir tmp
 ls -d K1* | while read i; do
-cd $i
-for j in $(seq 0.80 0.02 0.98); do
-if [ ! -s c_$j/reference.fasta ]; then echo "${i}/${j} missing reference"; continue; fi
-echo "starting" $i $j
-cd c_${j}
-mv reference.fasta* ../../tmp
-mv ref_config.file ../../tmp
-rm -fr *
-mv ../../tmp/* .
-awk '$0 ~ /Assembly/{print $0; getline; gsub($0,"no")}$0 ~ /Reads/{print $0; getline; gsub($0,"yes")}{print $0}' ref_config.file > map_config.file
-cp -s ../../test_set/*.fq.gz .
-cd ..; done
-cd ..; done
+	cd $i
+	for j in $(seq 0.80 0.02 0.98); do
+		if [ ! -s c_$j/reference.fasta ]; then echo "${i}/${j} missing reference"; continue; fi
+		echo "starting" $i $j
+		cd c_${j}
+		mv reference.fasta* ../../tmp
+		mv ref_config.file ../../tmp
+		rm -fr *
+		mv ../../tmp/* .
+		awk '$0 ~ /Assembly/{print $0; getline; gsub($0,"no")}$0 ~ /Reads/{print $0; getline; gsub($0,"yes")}{print $0}' ref_config.file > map_config.file
+		cp -s ../../test_set/*.fq.gz .
+		cd ..
+  	done
+	cd ..
+done
 rm -r tmp
 
 #Running the reference testing
+```{bash}```
 ls -d K1* | while read i; do
-for j in $(seq 0.80 0.02 0.98); do
-if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
-cd ${i}/c_${j}/
-while [ $(squeue | grep afields | wc -l) -ge 8 ]; do sleep 60; done
-echo "starting" $i $j
-sbatch $WORK/bin/slurm/dDocent_mapping_w_stats.slurm
-cd ../..
-sleep 5
-done
+	for j in $(seq 0.80 0.02 0.98); do
+		if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
+		cd ${i}/c_${j}/
+		echo "starting" $i $j
+		sbatch $WORK/bin/slurm/dDocent_mapping_w_stats.slurm
+		cd ../..
+		sleep 5
+	done
 done
 
 #Gathering mapping stats
+```{bash}```
 echo -e "K_values\tc-value\tFile\tReference\tTotal\tQC\tMapped\tPaired"> mapping_summary_all.txt
 ls -d K1* | while read i; do
-for j in $(seq 0.80 0.02 0.98); do
-echo $i $j
-if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
-cd ${i}/c_${j}/
-tail -n+2 bwa_mapping_summary.txt | awk -v Kval=$i -v Cval=$j '{print Kval, Cval, $0}'  >> ../../mapping_summary_all.txt
-cd ../..;
-done
+	for j in $(seq 0.80 0.02 0.98); do
+		echo $i $j
+		if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
+		cd ${i}/c_${j}/
+		tail -n+2 bwa_mapping_summary.txt | awk -v Kval=$i -v Cval=$j '{print Kval, Cval, $0}'  >> ../../mapping_summary_all.txt
+		cd ../..;
+	done
 done
 
 tail -n+2 mapping_summary_all.txt |cut -f1 -d" " | awk 'BEGIN{FS="_"; OFS="\t"}{print $2, $4}' > K_values.txt
@@ -156,16 +156,17 @@ paste -d"\t" K_values.txt data.txt > mapping_summary_df.txt
 sed -i  "1 s/^/K1\tK2\tcvalue\tFile\tTotal\tQC\tMapped\tPaired\n/" mapping_summary_df.txt
 
 #Gathering reference stats
+```{bash}```
 echo -e "K-values\tcvalue\tcontigs"> ref_summary.txt
 ls -d K1* | while read i; do
-for j in $(seq 0.80 0.02 0.98); do
-echo $i $j
-if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
-cd ${i}/c_${j}/
-TMP=$(grep ">" reference.fasta | wc -l)
-echo -e "$i\t$j\t$TMP" >> ../../ref_summary.txt
-cd ../..
-done
+	for j in $(seq 0.80 0.02 0.98); do
+		echo $i $j
+		if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
+		cd ${i}/c_${j}/
+		TMP=$(grep ">" reference.fasta | wc -l)
+		echo -e "$i\t$j\t$TMP" >> ../../ref_summary.txt
+		cd ../..
+	done
 done
 
 echo -e "K1\tK2\tc-value\tcontigs"> ref_summary_df.txt
@@ -173,13 +174,8 @@ tail -n+2 ref_summary.txt | awk 'BEGIN{FS="_|\t"; OFS="\t"}{print $2, $4, $5, $6
 
 scp ref_summary.txt mapping_summary_df.txt ref_summary.txt ref_summary_df.txt afields@earth.ad.tamucc.edu:/home/afields/Workspace/Robert/Cbovinus/reference
 
-#### Earth ####
-#Move to directory
-```{bash}```
-cd ~/Workspace/Robert/Cbovinus/reference
-
-```{R}```
 #define function
+```{R}```
 multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
   library(grid)
 
@@ -215,14 +211,15 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
     }
   }
 } #http://www.cookbook-r.com/Graphs/Multiple_graphs_on_one_page_(ggplot2)/
-}} #Cleaning up notepad++
 
 #Import libraries
+```{R}```
 library('tidyr')
 library('dplyr')
 library('ggplot2')
 
 #Import and combine data
+```{R}```
 dat.map <- read.table("mapping_summary_df.txt", head=T)
 dat.con <- read.table("ref_summary_df.txt", head=T)
 names(dat.con)[3] <- "cvalue"
@@ -232,12 +229,14 @@ head(dat.con)
 head(dat)
 
 #Manipulate data
+```{R}```
 dat$QC_per <- dat$QC/(dat$Total*2)
 dat$Mapped_per <- dat$Mapped/(dat$Total*2)
 dat$Paired_per <- dat$Paired/(dat$Total*2)
 head(dat)
 
 #Plot number of reads for each value of c for each K1 and K2 combination
+```{R}```
 ggplot(dat, aes(x = cvalue, y = contigs)) +
   theme(panel.grid.major=element_line(color="grey"), 
         panel.border=element_rect(color="black", fill=NA), 
@@ -248,6 +247,7 @@ ggplot(dat, aes(x = cvalue, y = contigs)) +
   labs(x = "% similarity c", y = "no. of contigs in reference")
 
 #histogram of the number of contigs per reference
+```{R}```
 hist(dat.con$contigs, breaks=10, xlab="Number of contigs in references", main="Histogram of the number of references in each combination")
 abline(v=mean(dat.con$contigs), col="red4")
 abline(v=median(dat.con$contigs), col="mediumblue")
@@ -255,11 +255,13 @@ mtext("mean", 3, adj=0.95, col="red4")
 mtext("median", 3, line=-1, adj=0.95, col="mediumblue")
 
 #Boxplot of number of contigs per contig vs cvalue
+```{R}```
 boxplot(dat$contigs ~ dat$cvalue)
 box<-boxplot(dat$contigs ~ dat$cvalue, plot=F)
 box
 
 #Looking at the quartiles
+```{R}```
 quart<-cbind(as.numeric(noquote(box$names)), box$stat[1,], box$stat[3,], box$stat[5,])
 colnames(quart)<-c("c","low", "med", "high")
 quart
@@ -274,12 +276,14 @@ points(quart[,1],quart[,4], col="red", pch=16)
 dev.off()
 
 #Computing the lag based upon 0.2 difference
+```{R}```
 lag1<-rbind(diff(quart[,4], lag=1), diff(quart[,3], lag=1), diff(quart[,2], lag=1))
 rownames(lag1)<-c("75%", "Median", "25%")
 colnames(lag1)<-c("0.80-0.82", "0.82-0.84", "0.84-0.86", "0.86-0.88", "0.88-0.90", "0.90-0.92", "0.92-0.94", "0.94-0.96", "0.96-0.98")
 lag1
 
 #Computing the lag based upon 0.4 difference
+```{R}```
 lag2<-rbind(diff(lag1[1,], lag1=1), diff(lag1[2,], lag1=1), diff(lag1[3,], lag1=1))
 rownames(lag2)<-rownames(lag1)
 colnames(lag2)<-c("0.80-0.84", "0.82-0.86", "0.84-0.88", "0.86-0.90", "0.88-0.92", "0.90-0.94", "0.92-0.96", "0.94-0.98")
@@ -348,82 +352,4 @@ dev.off()
 #Selecting K1_1_K2_2/c_0.88 reference
 
 #### Reference assembly complete ####
-#### HPC ####
-cd $WORK/Workspace/Robert/Cyprinodon/reference
-cp K1_1_K2_2/c_0.88/reference.fasta ./Cbovinus_reference.fasta
-
-#Getting samples for Gnobilis
-#Getting a list of samples from the Gambusia analysis
-cd ../data
-nano Cbovinus_samples.txt
-
-#Pulling this data from Gambusia
-ls -d I* | while read i; do
-echo "Processing $i"
-ls $WORK/Workspace/Robert/Cyprinodon/data/$i | grep -wf Cbovinus_samples.txt > tmp.file
-cat tmp.file | xargs -P 5 -I {} cp $WORK/Workspace/Robert/Cyprinodon/data/$i/{} $i/
-done
-
-#Mapping
-#Making directories
-find ./I* -type d > ../mapping/dirs.txt; cd ../mapping; xargs mkdir -p < dirs.txt; rm dirs.txt
-
-#Mapping data
-#Run on normal nodes, scripted to limit to 10 nodes
-ls | while read i; do cd $i; cp -s ../../data/$i/*.fq.gz .; cp -s ../../reference/Cbovinus_reference.fasta ./reference.fasta; cp -s $WORK/bin/slurm/map_config.file .; cd ..; done
-ls | while read i; do while [ $(squeue | grep afields | wc -l) -ge 8 ]; do sleep 60; done; cd $i; sbatch $WORK/bin/slurm/dDocent_mapping.slurm; cd ..; sleep 5; done
-
-#Filtering bam files
-ls | while read i; do while [ $(squeue | grep afields | wc -l) -ge 8 ]; do sleep 60; done; cd $i; sbatch $WORK/bin/slurm/dDocent_bamfiltering.slurm; cd ..; sleep 5; done
-
-#Making coverage files for all data
-#Run on normal nodes, scripted to limit to 10 nodes
-ls | while read i; do while [ $(squeue | grep afields | wc -l) -ge 8 ]; do sleep 60; done; cd $i; sbatch $WORK/bin/slurm/dDocent_cov.slurm; cd ..; sleep 5; done
-
-#Preparing folder for SNP calling
-mkdir ../SNP_calling
-cd ../SNP_calling
-mkdir tmp
-ls ../mapping | while read i; do echo $i; cp -s ../mapping/$i/*.bam* .; rm cat*; done
-ls ../mapping | while read i; do echo $i; cp -s ../mapping/$i/*.cov.stats .; 2done
-ls ../mapping | while read i; do echo $i; cat ../mapping/$i/mapped.bed >> all_mapped.bed; done
-sbatch $WORK/bin/slurm/dDocent_bed.slurm
-
-ls *.bam | sed 's/.bam//g' > namelist
-cut -f1 -d "_" namelist > p; paste namelist p > popmap; rm p
-sbatch $WORK/bin/slurm/dDocent_cat.slurm
-
-#Splitting cat.bam for SNP calling
-#Number of nodes used is determined by this split script
-sbatch -p jgoldq,normal --export=NODES=8 $WORK/bin/slurm/dDocent_split.slurm
-#for i in $(seq 1 8); do cd $i.node; cp -fs ../cat-RRG.bam* .; cd ..; done
-ls -d *.node | while read i; do cd $i; cp -s ../../reference/Cbovinus_reference.fasta ./reference.fasta; cd .. ; done
-
-#SNP calling on normal nodes, scripted to limit to 8 nodes
-ulimit -s 81920
-ls -d *.node | while read i; do while [ $(squeue | grep afields | awk '$5=="R" {print $0} $5=="PD" {print $0}' | wc -l) -ge 8 ]; do sleep 60; done; cd $i; ulimit -s 81920; sbatch -p jgoldq,normal $WORK/bin/slurm/dDocent_freebayes.slurm; cd ..; sleep 2; done
-
-#Checking to see if nodes have the correct number of vcf files with data in them
-ls -d *.node | while read i; do echo "checking $i"; cd $i; BEDS=$(ls mapped.*.bed | wc -l);	VCF=$(find . -name "*.vcf" -size +62k | wc -l); if [ $VCF -lt $BEDS ]; then echo $i "did not complete all the vcf files properly"; fi; if [ $(find . -name "*.vcf" | wc -l) -gt $BEDS ]; then echo $i "has too many vcf files present"; fi; cd ..; done
-
-#Checking to see if vcf file have the same number of contigs in the header as the reference.fasta has
-ls -d *.node | while read i; do echo "checking $i"; cd $i; ls raw.*.vcf | while read j; do VCF=$(head -n1 $j| grep "##" | wc -l); if [ $VCF -eq 0 ]; then echo $i $j "missing complete header"; echo ${i}/${j} >> ../bad.vcf; fi; done; cd ..; done
-
-#Combine all vcfs in each node
-ls -d *.node | while read i; do while [ $(squeue | grep afields | wc -l) -ge 8 ]; do sleep 60; done; cd $i; sbatch $WORK/bin/slurm/dDocent_combine_node.slurm; cd ..; sleep 5; done
-
-#Preparing to combine all the vcf files
-mkdir vcf
-cd vcf
-
-ls -d ../*.node | while read i; do 
-NODE=$(echo $i | sed 's:../::g' | cut -f1 -d .)
-cp -fs $i/cat.vcf ./raw.$NODE.vcf
-done
-
-#Combining all the vcf files
-sbatch $WORK/bin/slurm/dDocent_combine.slurm
-
-#Transfer
-scp TotalRawSNPs.vcf afields@earth.ad.tamucc.edu:/home/afields/Workspace/Robert/Cbovinus/filtering
 scp ../popmap afields@earth.ad.tamucc.edu:/home/afields/Workspace/Robert/Cbovinus/filtering
