@@ -2,8 +2,8 @@
 #Trimming data
 ```{bash}```
 cd data
-ls -d I* | while read i; do cd $i; cp -s $WORK/bin/slurm/trim_config.file .; cd ..; done
-ls -d I* | while read i; do cd $i; sbatch $WORK/bin/slurm/dDocent_trimming.slurm; cd ..; sleep 2; done
+ls -d I* | while read i; do cd $i; cp -s $WORK/slurm/trim_config.file .; cd ..; done
+ls -d I* | while read i; do cd $i; sbatch $WORK/slurm/dDocent_trimming.slurm; cd ..; sleep 2; done
 
 #Making subdirectories in the reference directory
 ```{bash}```
@@ -42,7 +42,7 @@ ls -d K1* | while read i; do
 		mkdir c_${j}
 		cd c_${j}
 		cp -s ../../ref_set/*.fq.gz .
-		sed "s/0.80/$j/g" $WORK/bin/slurm/ref_config.file | awk -v var1="$K1" -v var2="$K2" '$0 ~ /K1/{print $0; getline; gsub($0,var1)}$0 ~ /K2/{print $0; getline; gsub($0,var2)}{print $0}' > ref_config.file
+		sed "s/0.80/$j/g" $WORK/slurm/ref_config.file | awk -v var1="$K1" -v var2="$K2" '$0 ~ /K1/{print $0; getline; gsub($0,var1)}$0 ~ /K2/{print $0; getline; gsub($0,var2)}{print $0}' > ref_config.file
 		cd ..
 	done
 	cd ..
@@ -52,26 +52,6 @@ done
 ```{bash}```
 grep -rn -A1 Clustering_Similarity K1_1_K2_2/c_0.*/ref_config.file
 
-#For making the reference config files if they were not right in the last loop
-##Not used unless making the directories goes wrong##
-```{bash}```
-ls -d K1* | while read i; do
-	K1=$(echo $i | sed -e 's/_/\t/g' | cut -f2)
-	K2=$(echo $i | sed -e 's/_/\t/g' | cut -f4)
-	for j in $(seq 0.8 0.02 0.98); do
-		sed "s/0.80/$j/g" ~/bin/ref_config.file | awk -v var1="$K1" -v var2="$K2" '$0 ~ /K1/{print $0; getline; gsub($0,var1)}$0 ~ /K2/{print $0; getline; gsub($0,var2)}{print $0}' > ${i}/c_${j}/ref_config.file
-	done
-done
-
-#Removing the c-value directories if necessary
-##Not used unless making the directories goes wrong##
-```{bash}```
-ls -d K1* | while read i; do 
-	cd $i
-	rm -r *
-	cd ..
-done
-
 #Running the reference building
 ```{bash}```
 ls -d K1* | while read i; do
@@ -79,7 +59,7 @@ ls -d K1* | while read i; do
 	for j in $(seq 0.8 0.02 0.98); do
 		cd c_${j}
 		echo "starting" $i $j
-		sbatch -p jgoldq,normal $WORK/bin/slurm/dDocent_ref_assembly.slurm
+		sbatch $WORK/slurm/dDocent_ref_assembly.slurm
 		sleep 2
 		cd ..
   	done
@@ -89,19 +69,6 @@ done
 #Checking if references built
 ```{bash}```
 ls -d K1_*_K2_*/c_* | while read i; do if [ ! -s $i/reference.fasta ]; then echo "$i missing reference"; fi; done
-
-#Running on ones without a reference
-#Does not need to run if all assemblies are good
-```{bash}```
-ls -d K1_*_K2_*/c_* | while read i; do 
-	if [ ! -s $i/reference.fasta ]; then
-		echo "restarting $i"
-		cd $i
-		sbatch $WORK/bin/slurm/dDocent_ref_assembly.slurm
-		cd ../..
-		sleep 2
-	fi
-done
 
 #Removing extraneous files from reference making and preparing for mapping
 ```{bash}```
@@ -131,7 +98,7 @@ ls -d K1* | while read i; do
 		if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
 		cd ${i}/c_${j}/
 		echo "starting" $i $j
-		sbatch $WORK/bin/slurm/dDocent_mapping_w_stats.slurm
+		sbatch $WORK/slurm/dDocent_mapping_w_stats.slurm
 		cd ../..
 		sleep 5
 	done
@@ -173,44 +140,6 @@ echo -e "K1\tK2\tc-value\tcontigs"> ref_summary_df.txt
 tail -n+2 ref_summary.txt | awk 'BEGIN{FS="_|\t"; OFS="\t"}{print $2, $4, $5, $6}' >> ref_summary_df.txt
 
 scp ref_summary.txt mapping_summary_df.txt ref_summary.txt ref_summary_df.txt afields@earth.ad.tamucc.edu:/home/afields/Workspace/Robert/Cbovinus/reference
-
-#define function
-```{R}```
-multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
-  library(grid)
-
-  # Make a list from the ... arguments and plotlist
-  plots <- c(list(...), plotlist)
-
-  numPlots = length(plots)
-
-  # If layout is NULL, then use 'cols' to determine layout
-  if (is.null(layout)) {
-    # Make the panel
-    # ncol: Number of columns of plots
-    # nrow: Number of rows needed, calculated from # of cols
-    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
-                    ncol = cols, nrow = ceiling(numPlots/cols))
-  }
-
- if (numPlots==1) {
-    print(plots[[1]])
-
-  } else {
-    # Set up the page
-    grid.newpage()
-    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
-
-    # Make each plot, in the correct location
-    for (i in 1:numPlots) {
-      # Get the i,j matrix positions of the regions that contain this subplot
-      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
-
-      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
-                                      layout.pos.col = matchidx$col))
-    }
-  }
-} #http://www.cookbook-r.com/Graphs/Multiple_graphs_on_one_page_(ggplot2)/
 
 #Import libraries
 ```{R}```
@@ -349,7 +278,4 @@ abline(v=mean(dat.map$Pair_Per[which(dat.map$cvalue == 0.88 & dat.map$K1 == 2 & 
 abline(v=median(dat.map$Pair_Per[which(dat.map$cvalue == 0.88 & dat.map$K1 == 2 & dat.map$K2 == 2)]), col="black", lty=2)
 dev.off()
 
-#Selecting K1_1_K2_2/c_0.88 reference
-
-#### Reference assembly complete ####
-scp ../popmap afields@earth.ad.tamucc.edu:/home/afields/Workspace/Robert/Cbovinus/filtering
+#K1=1, K2=2, c-value= 0.88
