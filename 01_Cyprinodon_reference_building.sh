@@ -71,9 +71,11 @@ cd ..
 done
 
 #Config file check
+```{bash}```
 grep -rn -A1 Clustering_Similarity K1_1_K2_2/c_0.*/ref_config.file
 
 #Running the reference building
+```{bash}```
 ls -d K1* | while read i; do
 cd $i
 for j in $(seq 0.8 0.02 0.98); do
@@ -85,9 +87,11 @@ cd ..; done
 cd ..; done
 
 #Checking if references built
+```{bash}```
 ls -d K1_*_K2_*/c_* | while read i; do if [ ! -s $i/reference.fasta ]; then echo "$i missing reference"; fi; done
 
 #Removing extraneous files from reference making and preparing for mapping
+```{bash}```
 mkdir tmp
 ls -d K1* | while read i; do
 cd $i
@@ -106,6 +110,7 @@ cd ..; done
 rm -r tmp
 
 #Running the reference testing
+```{bash}```
 ls -d K1* | while read i; do
 for j in $(seq 0.80 0.02 0.98); do
 if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
@@ -117,6 +122,7 @@ cd ../..
 done
 
 #Gathering mapping stats
+```{bash}```
 echo -e "K_values\tc-value\tFile\tReference\tTotal\tQC\tMapped\tPaired"> mapping_summary_all.txt
 ls -d K1* | while read i; do
 for j in $(seq 0.80 0.02 0.98); do
@@ -134,6 +140,7 @@ paste -d"\t" K_values.txt data.txt > mapping_summary_df.txt
 sed -i  "1 s/^/K1\tK2\tcvalue\tFile\tTotal\tQC\tMapped\tPaired\n/" mapping_summary_df.txt
 
 #Gathering reference stats
+```{bash}```
 echo -e "K-values\tcvalue\tcontigs"> ref_summary.txt
 ls -d K1* | while read i; do
 for j in $(seq 0.80 0.02 0.98); do
@@ -149,13 +156,15 @@ done
 echo -e "K1\tK2\tc-value\tcontigs"> ref_summary_df.txt
 tail -n+2 ref_summary.txt | awk 'BEGIN{FS="_|\t"; OFS="\t"}{print $2, $4, $5, $6}' >> ref_summary_df.txt
 
-```{R}```
+
 #Import libraries
+```{R}```
 library('tidyr')
 library('dplyr')
 library('ggplot2')
 
 #Import and combine data
+```{R}```
 dat.map <- read.table("mapping_summary_df.txt", head=T)
 dat.con <- read.table("ref_summary_df.txt", head=T)
 names(dat.con)[3] <- "cvalue"
@@ -165,12 +174,14 @@ head(dat.con)
 head(dat)
 
 #Manipulate data
+```{R}```
 dat$QC_per <- dat$QC/(dat$Total*2)
 dat$Mapped_per <- dat$Mapped/(dat$Total*2)
 dat$Paired_per <- dat$Paired/(dat$Total*2)
 head(dat)
 
 #Plot number of reads for each value of c for each K1 and K2 combination
+```{R}```
 ggplot(dat, aes(x = cvalue, y = contigs)) +
   theme(panel.grid.major=element_line(color="grey"), 
         panel.border=element_rect(color="black", fill=NA), 
@@ -181,6 +192,7 @@ ggplot(dat, aes(x = cvalue, y = contigs)) +
   labs(x = "% similarity c", y = "no. of contigs in reference")
 
 #histogram of the number of contigs per reference
+```{R}```
 hist(dat.con$contigs, breaks=10, xlab="Number of contigs in references", main="Histogram of the number of references in each combination")
 abline(v=mean(dat.con$contigs), col="red4")
 abline(v=median(dat.con$contigs), col="mediumblue")
@@ -188,11 +200,13 @@ mtext("mean", 3, adj=0.95, col="red4")
 mtext("median", 3, line=-1, adj=0.95, col="mediumblue")
 
 #Boxplot of number of contigs per contig vs cvalue
+```{R}```
 boxplot(dat$contigs ~ dat$cvalue)
 box<-boxplot(dat$contigs ~ dat$cvalue, plot=F)
 box
 
 #Looking at the quartiles
+```{R}```
 quart <- cbind(as.numeric(noquote(box$names)), box$stat[1,], box$stat[3,], box$stat[5,])
 colnames(quart)<-c("c","low", "med", "high")
 quart
@@ -201,12 +215,14 @@ points(quart[,1],quart[,3], col="orange", pch=16)
 points(quart[,1],quart[,4], col="red", pch=16)
 
 #Computing the lag based upon 0.2 difference
+```{R}```
 lag1 <- rbind(diff(quart[,4], lag=1), diff(quart[,3], lag=1), diff(quart[,2], lag=1))
 rownames(lag1) <- c("75%", "Median", "25%")
 colnames(lag1) <- c("0.80-0.82", "0.82-0.84", "0.84-0.86", "0.86-0.88", "0.88-0.90", "0.90-0.92", "0.92-0.94", "0.94-0.96", "0.96-0.98")
 lag1
 
 #Computing the lag based upon 0.4 difference
+```{R}```
 lag2 <- rbind(diff(lag1[1,], lag1=1), diff(lag1[2,], lag1=1), diff(lag1[3,], lag1=1))
 rownames(lag2) <- rownames(lag1)
 colnames(lag2) <- c("0.80-0.84", "0.82-0.86", "0.84-0.88", "0.86-0.90", "0.88-0.92", "0.90-0.94", "0.92-0.96", "0.94-0.98")
@@ -243,6 +259,7 @@ legend(x=1, y=max(lag2[1,]), legend=c("75% Q", "50% Q", "25% Q"), pch=16, col=c(
 dev.off()
 
 #Mapping Comparisons
+```{R}```
 dat.map$Map_Per <- dat.map$Mapped/(dat.map$Total*2)
 dat.map$Pair_Per <- dat.map$Paired/(dat.map$Total*2)
 
@@ -255,7 +272,6 @@ par(mfrow = c(3, 1))
 hist(dat.map$Map_Per[which(dat.map$cvalue == 0.88 & dat.map$K1 == 1 & dat.map$K2 == 2)], col="red4", breaks=seq(0,1,0.01), xlab="Percent Mapped", main="K1 = 1 and K2 = 2", xlim=c(0,1))
 hist(dat.map$Map_Per[which(dat.map$cvalue == 0.88 & dat.map$K1 == 2 & dat.map$K2 == 1)], col="darkgreen", breaks=seq(0,1,0.01), xlab="Percent Mapped", main="K1 = 2 and K2 = 1", xlim=c(0,1))
 hist(dat.map$Map_Per[which(dat.map$cvalue == 0.88 & dat.map$K1 == 2 & dat.map$K2 == 2)], col="mediumblue", breaks=seq(0,1,0.01), xlab="Percent Mapped", main="K1 = 2 and K2 = 2", xlim=c(0,1))
-
 
 which(dat.map$Map_Per[which(dat.map$cvalue == 0.88 & dat.map$K1 == 1 & dat.map$K2 == 2)] < 0.5)
 
