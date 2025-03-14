@@ -82,7 +82,7 @@ charts.sh B.1.3.3.2.3.2.1.2.SNP.finalb.recode.vcf
 ```{bash}```
 dDocent_filters.sh B.1.3.3.2.3.2.1.2.SNP.finalb.recode.vcf SNP.TRS.F04 PE no
 
-charts_plus_opt.sh SNP.TRS.F04.FIL.recode.vcf
+charts.sh SNP.TRS.F04.FIL.recode.vcf
 
 #Removing paralogs and indivduals with high missing data#
 ```{bash}```
