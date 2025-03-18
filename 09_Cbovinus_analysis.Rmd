@@ -1,0 +1,431 @@
+### Analyzing the C. bovinus dataset ###
+
+#Loading Libraries
+```{R}
+library('devtools')
+library('pegas')
+library('adegenet')
+library('vcfR') 
+library('rospca')
+library('dartR')
+library('zvau')
+library('geosphere')
+library('stringr')
+library('ggmap')
+library('ggcompoplot')
+library('vegan')
+library('spdep')
+library('adespatial')
+library('igraph')
+library('poppr') 
+library('smatr')
+library('radiator')
+library('related')
+library('dartR')
+library('scales')
+library('akima')
+library('spacemakeR')
+library('hierfstat')
+library('ggpubr')
+library('PopGenReport')
+library('sdmpredictors') 
+library('ggord')
+library('coin')
+```
+
+#Add functions
+```{R}
+#Pulls the unique loci names from alleles selected from genind object names (e.g. dDocent_Contig_23960.001)
+Loci_names <- function(NAMES, SEP="[.]", REMOVE=1){
+COL <- length(strsplit(head(NAMES,n=1), SEP)[[1]])
+TMP_U <- unique(matrix(unlist(strsplit(NAMES,SEP)),ncol=COL,byrow=T)[,1:(COL-REMOVE)])
+if(is.matrix(TMP_U)){TMP_DF <- data.frame(TMP_U)
+} else {TMP_DF <- data.frame(matrix(TMP_U, ncol=(COL-REMOVE), byrow=T))}
+return(tidyr::unite(TMP_DF, "loci", 1:ncol(TMP_DF), sep=SEP))
+}
+
+
+
+#Removing loci for genind object from a vcf; Needs to have "dDocent_Contig_#_Pos" format
+#Could add an option to select the locus list or remove it
+VCF_remove <- function(genind.vcf, loci.list){
+tmp.loci <- matrix(unlist(strsplit(locNames(genind.vcf),"_")), ncol=4, byrow=T)
+if(sum(is.na(tail(tmp.loci, n=1)))){print("locNames(genind) in incorrect format"); break}
+tmp.loci <- data.frame(Locus=paste(tmp.loci[,1], tmp.loci[,2], tmp.loci[,3],sep="_"), Pos=tmp.loci[,4])
+
+tmp <- vector()
+for(i in loci.list){
+ROW <- which(tmp.loci$Locus == i)
+tmp <- append(tmp,paste(tmp.loci$Locus, tmp.loci$Pos, sep="_")[ROW])
+}
+
+set.loc <- subset(locNames(genind.vcf), !locNames(genind.vcf) %in% tmp)
+return(genind.vcf[ ,loc=set.loc])
+}
+```
+
+#Importing Data
+```{R}
+strata <- read.csv(file = "SNP.TRS.F07.2022-03-10/indv.csv", header = TRUE)
+
+vcf <- read.vcfR(file="SNP.TRS.F07.vcf")
+gen.vcf<-vcfR2genind(vcf)
+strata(gen.vcf) <- strata[match(indNames(gen.vcf),strata$INDV),]
+head(strata(gen.vcf))
+rm(vcf)
+
+gen <- read.genepop(file = "SNP.TRS.F07.gen", ncode=3L, quiet = FALSE)
+strata(gen) <- strata[match(indNames(gen),strata$INDV),]
+head(strata(gen))
+
+#Adding related ID to strata
+gen.indv <- substr(gen@strata$INDV, 1, 20)
+gen.indv <- data.frame(cbind(as.character(gen@strata$INDV), gen.indv))
+names(gen.indv) <- c("gen.ID", "relate.ID")
+
+gen@strata$relate.ID <- gen.indv[match(indNames(gen),gen.indv$gen.ID),"relate.ID"]
+head(strata(gen))
+```
+
+#Setting color schemes
+```{R}
+c2 <- c("darkorange3", "grey35")
+c3 <- c("red4", "mediumblue", "grey35")
+c4 <- c("mediumblue", "red4", "grey50", "grey35")
+```
+
+#Relatedness within site
+```{R}
+min.list <- max.list <- NULL
+
+setPop(gen) <- ~POP
+gen.list <- seppop(gen, drop=T)
+par(mfrow=c(2,2))
+
+for(i in names(gen.list)){
+tmp.gen <- gen.list[[i]]
+if(nInd(tmp.gen) < 5){next}
+gl <- gi2gl(tmp.gen)
+test.cov <- gl2related(gl, save=F)
+tmp.rel <- coancestry(test.cov, wang =1)$relatedness
+min.list <- c(min.list, min(tmp.rel$wang))
+max.list <- c(max.list, max(tmp.rel$wang))
+hist(tmp.rel$wang, breaks=50, col="red4", main=i)
+assign(paste(i,"rel",sep="_"), tmp.rel)
+}
+
+MIN <- min(min.list)
+MAX <- max(max.list)
+
+tmp.break <- seq(MIN,MAX,(MAX-MIN)/100)
+
+rel.list <- NULL
+
+png("Site_specific_relatedness.png", res=200, width=8000, height=6000)
+par(mfrow=c(2,2))
+for(i in names(gen.list)){
+tmp.gen <- gen.list[[i]]
+if(nInd(tmp.gen) < 10){next}
+tmp.rel <- get(paste(i,"rel",sep="_"))
+rel.list <- rbind(rel.list, tmp.rel[tmp.rel$wang > 0.4,c(2,3,6)])
+hist(tmp.rel$wang, breaks=tmp.break, col="red4", main=i, xlim=c(MIN,MAX), xlab="relatedness")
+}
+dev.off()
+```
+
+#Removing duplicates and related individuals
+```{R}
+rm.list <- list()
+
+for(i in 1:nrow(rel.list)){
+j <- as.character(rel.list[i,])
+
+tmp <- gen@strata[gen@strata$relate.ID %in% j, ]
+tmp$Diff <- abs(as.numeric(as.character(tmp[ , "E.HOM."])) - as.numeric(as.character(tmp[ , "O.HOM."])))
+
+Miss.tab <- table(as.numeric(as.character(tmp$N_MISS)))
+Depth.tab <- table(as.numeric(as.character(tmp$MEAN_DEPTH)))
+
+MIN.Miss <- min(as.numeric(names(Miss.tab)))
+MAX.Depth <- max(as.numeric(names(Depth.tab)))
+
+if(Miss.tab[names(Miss.tab)==MIN.Miss]==1 && Depth.tab[names(Depth.tab)==MAX.Depth]==1){keep <- as.character(tmp[tmp$N_MISS==MIN.Miss,1])
+} else {keep <- as.character(tmp[tmp$Diff == min(tmp$Diff),1])}
+print(keep)
+
+rm.list[[i]] <- as.character(tmp[grep(keep, tmp$INDV, invert=T),1])
+rm(keep, tmp)
+}
+
+set.ind <- subset(indNames(gen), !indNames(gen) %in% rm.list)
+gen2 <- gen[set.ind, ]
+set.ind <- subset(indNames(gen.vcf), !indNames(gen.vcf) %in% rm.list)
+gen2.vcf <- gen.vcf[set.ind, ]
+
+save(gen2, file="gen2.gz", commpress=T)
+#load("gen2.gz")
+save(gen2.vcf, file="gen2.vcf.gz", commpress=T)
+#load("gen2.vcf.gz")
+```
+
+#Outlier Detection (Outflank)
+```{R}
+setPop(gen2.vcf) <- ~POP
+tmp <- gl.outflank(gen2.vcf, qthreshold = 0.1)
+length(which(tmp$outflank$results[15]=="TRUE" & tmp$outflank$results[11]=="goodH"))
+
+outliers <- tmp$outflank$results[which(tmp$outflank$results[15]=="TRUE" & tmp$outflank$results[11]=="goodH"),1]
+out.list <- matrix(unlist(strsplit(as.vector(outliers),"[.]")),ncol=2,byrow=T)[,1]
+tmp <- matrix(unlist(strsplit(as.vector(outliers),"[_]")),ncol=4,byrow=T)
+gen.out.list<-unique(paste(tmp[,1],tmp[,2],tmp[,3],sep="_"))
+length(gen.out.list) 
+
+write.table(gen.out.list, "Outflank_outlier.list", quote=F, col.names=F, row.names=F)
+```
+
+#Fst Outliers (Bayescan)
+```{R}
+#Exporting data for Bayescan
+setPop(gen2) <- ~POP
+writeGenPop(gen2, "SNP.TRS.Final_all.gen", "C. bovinus data without dups by POP")
+```
+
+#Converting to BS format
+```{bash}
+java8 -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_all.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_all.BS -outputformat BAYESCAN -spid /home/afields/bin/genepop_to_BS.spid
+```
+
+#Running Bayescan
+```{bash}
+mkdir Bayescan
+bayescan SNP.TRS.Final_all.BS -od ./Bayescan2 -all-trace -threads 15 -thin 100 -nbp 30 -pr_odds 100
+```
+
+#Analyzing results
+```{bash}
+#All sites
+head -n2 ../SNP.TRS.Final_all.gen | tail -n 1 | sed 's/, /\n/g' > contigs
+echo "Contigs" | cat - contigs > tmp; mv tmp contigs
+paste contigs SNP.TRS.Final_al_fst.txt | awk 'NR==1{print $0}NR!=1{$2=""; print}' > fst_out.txt
+
+awk 'NR==1{next;} $4 < 0.05{print $0}' fst_out.txt | wc -l
+awk 'NR==1{print $0;next;} $4 < 0.05{print $0}' fst_out.txt | less
+awk 'NR==1{next;} $4 < 0.05' fst_out.txt | cut -f1 -d" "> Bayescan_Outliers.list
+```
+
+#Gathering Outlier loci
+```{R}
+setPop(gen2) <- ~POP
+
+#Outlier Loci
+OF.out <- read.table("Outflank_outlier.list", head=F)[,1]
+BS.out <- read.table("Bayescan/Bayescan_Outliers.list", head=F)[,1]
+
+out.list <- unique(c(OF.out, BS.out))
+length(out.list)
+
+set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% out.list))]
+gen3 <- gen2[, loc=set.loc]
+gen3.vcf <- VCF_remove(gen2.vcf, gen.out.list)
+
+gen3.out <- gen2[, loc=out.list]
+set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% out.list))]
+gen3.out.vcf <- VCF_remove(gen2.vcf, set.loc)
+```
+
+#PCA
+```{R}
+X <- scaleGen(gen3, NA.method="mean", scale=F)
+pca1 <- dudi.pca(X,cent=T,scale=T,scannf=FALSE,nf=5000)
+setPop(gen3) <- ~POP
+
+par(mfrow=c(1,1))
+tmp.dat <- cbind(gen3@strata, pca1$li[match(gen3@strata$INDV, rownames(pca1$li)),])
+
+p.net_POP <- ggplot() + geom_point(data=tmp.dat, aes(x=Axis1, y=Axis2, fill=POP), pch=21, size=3) + scale_fill_manual(values=funky(3)) + theme_classic() + 
+labs(x=paste("PC1: ",sprintf("%.2f",(pca1$eig[1]/sum(pca1$eig))*100)," %", sep=""), y=paste("PC2: ",sprintf("%.2f",(pca1$eig[2]/sum(pca1$eig))*100)," %", sep="")) +
+guides(fill=guide_legend(title="Sites", override.aes = list(shape = 23))) + 
+ggtitle(paste("Neutral data (n=",length(locNames(gen3))," loci)", sep=""))
+stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(5)) + guides(color="none")
+p.net_POP
+
+ggsave(p.net_POP, file="PCA_gennet_POP_v2.png", device="png")
+ggsave(p.net_POP, file="PCA_gennet_POP_v2.svg", device="svg")
+
+X.out <- scaleGen(gen3.out, NA.method="mean", scale=F)
+pca.out <- dudi.pca(X.out,cent=T,scale=T,scannf=FALSE,nf=5000)
+setPop(gen3.out) <- ~POP
+
+par(mfrow=c(1,1))
+tmp.dat <- cbind(gen3.out@strata, pca.out$li[match(gen3.out@strata$INDV, rownames(pca.out$li)),])
+
+p.out_POP <- ggplot() + geom_point(data=tmp.dat, aes(x=Axis1, y=Axis2, fill=POP), pch=21, size=3) + scale_fill_manual(values=funky(3)) + theme_classic() + 
+labs(x=paste("PC1: ",sprintf("%.2f",(pca.out$eig[1]/sum(pca.out$eig))*100)," %", sep=""), y=paste("PC2: ",sprintf("%.2f",(pca.out$eig[2]/sum(pca.out$eig))*100)," %", sep="")) +
+guides(fill=guide_legend(title="Sites", override.aes = list(shape = 23))) + 
+ggtitle(paste("Outlier data (n=",length(locNames(gen3.out))," loci)", sep=""))
+stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(5)) + guides(color="none")
+p.out_POP
+
+ggsave(p.out_POP, file="PCA_genout_POP_v2.png", device="png")
+ggsave(p.out_POP, file="PCA_genout_POP_v2.svg", device="svg")
+```
+
+## DAPC ##
+#Neutral loci#
+```{R}
+#Looking at groups
+grp <- find.clusters(gen3,  max.n.clust=20, n.pca=400, method = "kmeans")
+```
+
+#DAPC Cross Validation
+```{R}
+X.net <- scaleGen(gen3, NA.method="mean", scale=F)
+
+tiff("Xval_grps_net_loci.tif", res=300, height =2000, width=2000)
+par(mfrow=c(3,1))
+xval.2.net <- xvalDapc(X.net, grp2$grp, n.pca.max = 300, training.set = 0.9, result = "groupMean", center = TRUE, scale = FALSE, n.pca = NULL, n.rep = 50, xval.plot = TRUE)
+dev.off()
+
+xval.2.net[2:6]
+xval.3.net[2:6]
+xval.4.net[2:6]
+```
+
+#Composition plots
+```{R}
+tmp <- data.frame(grp2$grp)[match(gen3@strata$INDV,names(grp2$grp)),]
+gen3@strata$G2 <- as.numeric(tmp)
+
+p2.comp<-ggcompoplot(xval.2.net$DAPC, gen3, pal = c2, cols=3) + theme(axis.text.x = element_blank()) + ggtitle("K-means 2 Groups")
+
+p2.comp
+```
+
+#Exporting for NeEstimator and Arleqiun
+```{R}
+setPop(gen3)<-~POP
+writeGenPop(gen3, "SNP.TRS.Final_net.gen", "Neutral C. bovinus data without dups by POP")
+```
+
+#Convert to Arlequin format
+```{bash}
+java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_net.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_net.arp -outputformat Arlequin -spid ~/bin/genepop_to_arlequin_STD.spid
+```
+
+## Preparing the data tables ##
+#Allelic Richness
+```{R}
+setPop(gen3) <- ~POP
+Ar_data.df <- allelic.richness(gen3)$Ar
+```
+
+#Expected Heterozygosity (from Arelquin)
+```{R}
+He_data.df <- read.table("He.csv", head=T, sep=",")
+rownames(He_data.df) <- He_data.df[,1]
+He_data.df <- He_data.df[,2:ncol(He_data.df)]
+```
+
+## Running the Friedmans ##
+#Will print the results to the screen
+```{R}
+for(i in 1:2){
+VAR <- c("Ar", "He")[i]
+data.df <- get(paste(VAR, "_data.df", sep=""))
+
+#Removing rows with NA
+na.test <- apply(data.df, 1, function(x) sum(is.na(x)))
+data.df <- data.df[which(na.test == 0),]
+
+#"Gathering" data
+data.m <- matrix(ncol=3)
+for(j in 1:length(locNames(gen3)[which(na.test == 0)])){
+tmp.m <- matrix(c(rep(locNames(gen3)[j],ncol(data.df)), colnames(data.df), as.numeric(data.df[j,])),ncol=3,byrow=F)
+data.m <- rbind(data.m, tmp.m)
+}
+test.df <- as.data.frame(data.m[-1, ])
+colnames(test.df) <- c("Locus","POP","VAR")
+
+#Friedman's test
+tmp.dat <- friedman.test(VAR ~ POP | Locus, data=test.df)
+print(paste("Friedman's test on", VAR, "( n=", nrow(data.df),")"))
+print(tmp.dat)
+print(apply(get(paste(VAR, "_data.df", sep="")), 2, function(x) mean(x, na.rm=T)))
+}
+```
+
+## Wilcoxon test ##
+#Preparing final data table
+```{R}
+result_m <- t(combn(unique(test.df$POP), 2))
+result_m <- cbind(result_m, matrix(ncol=2, nrow=nrow(result_m)))
+
+result_df <- as.data.frame(result_m)
+colnames(result_df) <- c("Loc1", "Loc2", "stat", "pvalue")
+for(i in 3:4){result_df[,i] <- as.numeric(as.matrix(result_df[,i]))}
+
+#Emptying error log
+error.list <- NULL
+
+#Loop for Wilcox test
+for(i in 2){
+VAR <- c("Ar", "He")[i]
+data.df <- get(paste(VAR, "_data.df", sep=""))
+
+#Gathering the loci to test
+data.m <- matrix(ncol=3)
+for(j in 1:length(locNames(gen3))){
+tmp.m <- matrix(c(rep(locNames(gen3)[j],ncol(data.df)), colnames(data.df), as.numeric(data.df[j,])),ncol=3,byrow=F)
+data.m <- rbind(data.m, tmp.m)
+}
+test.df <- as.data.frame(data.m[-1, ])
+colnames(test.df) <- c("Locus","POP","VAR")
+
+#Formating the results table
+test.df$VAR <- as.numeric(as.matrix(test.df$VAR))
+result_m <- t(combn(unique(test.df$POP), 2))
+result_m <- cbind(result_m, matrix(ncol=3, nrow=nrow(result_df)))
+
+#Running the pairwise wilcox test by strata
+for(k in 1:nrow(result_m)){
+tmp.df <- test.df[test.df$POP %in% result_m[k,1:2],]
+tmp.df$POP <- gdata::drop.levels(tmp.df$POP)
+if(length(table(tmp.df$POP)) != 2){next}
+rm.loci <- as.character(as.matrix(unique(tmp.df$Locus[is.na(tmp.df$VAR)])))
+tmp.df <- tmp.df[!tmp.df$Locus %in% rm.loci,]
+tmp.df$Locus <- gdata::drop.levels(tmp.df$Locus)
+tmp.df$POP <- as.factor(tmp.df$POP)
+tmp.df$Locus <- as.factor(tmp.df$Locus)
+possibleError <- tryCatch(tmp.out <- wilcoxsign_test(VAR ~ POP | Locus, tmp.df), error=function(e) e)
+if(inherits(possibleError, "error")){error.list <- c(error.list,c(VAR,result_m[k,1:2])); next}
+tmp.df$POP <- factor(tmp.df$POP, levels=c(result_m[k,1], result_m[k,2]))
+tmp.out <- wilcoxsign_test(VAR ~ POP | Locus,tmp.df)
+tmp.stat <- statistic(tmp.out)
+tmp.p <- pvalue(tmp.out)
+result_m[k,3:4] <- c(tmp.stat, tmp.p)
+
+tmp.td <- tidyr::spread(tmp.df, POP, VAR)
+tmp.td$diff <- tmp.td[,2] - tmp.td[,3]
+tmp.td$rank <- rank(abs(tmp.td$diff))
+tmp.td$sgn <- tmp.td$diff
+tmp.td$sgn[tmp.td$sgn > 0] <- 1
+tmp.td$sgn[tmp.td$sgn < 0] <- -1
+
+result_m[k,5] <- sum(tmp.td$sgn*tmp.td$rank)
+}
+
+#formatting the results
+result_df <- as.data.frame(result_m)
+colnames(result_df) <- c("Loc1", "Loc2", "stat", "pvalue", "T_stat")
+for(j in 3:5){result_df[,j] <- as.numeric(as.matrix(result_df[,j]))}
+result_df$pvalue_adj <- p.adjust(result_df$pvalue, method="fdr")
+print(paste("Wilcox test on", VAR))
+print(paste("Number of significant results:", length(which(result_df$pvalue < 0.05))))
+print(paste("Number of significant results adj:", length(which(result_df$pvalue_adj < 0.05))))
+#print(result_df[result_df$pvalue < 0.05])
+
+#creating an object of the pairwise results (e.g., Ar_wilcox.df)
+assign(paste(VAR,"_wilcox.df",sep=""), result_df)
+}
+
+```
