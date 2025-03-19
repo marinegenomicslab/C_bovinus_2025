@@ -2,11 +2,12 @@
 
 #Trimming reads
 ```{bash}```
-screen -S Cyprinodon
 ls -d I* | while read i; do
-cd $i
-cp ~/bin/trim_config.file .
-dDocent trim_config.file & done
+  cd $i
+  cp ~/bin/trim_config.file .
+  dDocent trim_config.file & 
+  cd ..
+done
 
 #Making subdirectories in the reference directory
 ```{bash}```
@@ -23,30 +24,30 @@ nano test_set.txt
 #Copy files to the directories
 ```{bash}```
 ls *_set.txt | while read i; do
-echo "Processing $i"
-SET=$(echo $i | cut -f1 -d".")
-cd $SET
-cat ../$i | while read j; do
-cp ../../data/I*/${j}*.fq.gz .
-done
-cd ..
+  echo "Processing $i"
+  SET=$(echo $i | cut -f1 -d".")
+  cd $SET
+  cat ../$i | while read j; do
+    cp ../../data/I*/${j}*.fq.gz .
+  done
+  cd ..
 done
 
 #Making the reference directories
 ```{bash}```
 ls -d K1* | while read i; do
-echo "making" $i
-K1=$(echo $i | sed -e 's/_/\t/g' | cut -f2)
-K2=$(echo $i | sed -e 's/_/\t/g' | cut -f4)
-cd $i
-for j in $(seq 0.8 0.02 0.98); do
-mkdir c_${j}
-cd c_${j}
-cp -s ../../ref_set/*.fq.gz .
-sed "s/0.80/$j/g" $WORK/bin/slurm/ref_config.file | awk -v var1="$K1" -v var2="$K2" '$0 ~ /K1/{print $0; getline; gsub($0,var1)}$0 ~ /K2/{print $0; getline; gsub($0,var2)}{print $0}' > ref_config.file
-cd ..
-done
-cd ..
+  echo "making" $i
+  K1=$(echo $i | sed -e 's/_/\t/g' | cut -f2)
+  K2=$(echo $i | sed -e 's/_/\t/g' | cut -f4)
+  cd $i
+  for j in $(seq 0.8 0.02 0.98); do
+    mkdir c_${j}
+    cd c_${j}
+    cp -s ../../ref_set/*.fq.gz .
+    sed "s/0.80/$j/g" $WORK/bin/slurm/ref_config.file | awk -v var1="$K1" -v var2="$K2" '$0 ~ /K1/{print $0; getline; gsub($0,var1)}$0 ~ /K2/{print $0; getline; gsub($0,var2)}{print $0}' > ref_config.file
+    cd ..
+  done
+  cd ..
 done
 
 #Config file check
@@ -56,14 +57,16 @@ grep -rn -A1 Clustering_Similarity K1_1_K2_2/c_0.*/ref_config.file
 #Running the reference building
 ```{bash}```
 ls -d K1* | while read i; do
-cd $i
-for j in $(seq 0.8 0.02 0.98); do
-cd c_${j}
-echo "starting" $i $j
-sbatch $WORK/slurm/dDocent_ref_assembly.slurm
-sleep 2
-cd ..; done
-cd ..; done
+  cd $i
+  for j in $(seq 0.8 0.02 0.98); do
+    cd c_${j}
+    echo "starting" $i $j
+    sbatch $WORK/slurm/dDocent_ref_assembly.slurm
+    sleep 2
+    cd ..
+  done
+  cd ..
+done
 
 #Checking if references built
 ```{bash}```
@@ -73,44 +76,46 @@ ls -d K1_*_K2_*/c_* | while read i; do if [ ! -s $i/reference.fasta ]; then echo
 ```{bash}```
 mkdir tmp
 ls -d K1* | while read i; do
-cd $i
-for j in $(seq 0.80 0.02 0.98); do
-if [ ! -s c_$j/reference.fasta ]; then echo "${i}/${j} missing reference"; continue; fi
-echo "starting" $i $j
-cd c_${j}
-mv reference.fasta* ../../tmp
-mv ref_config.file ../../tmp
-rm -fr *
-mv ../../tmp/* .
-awk '$0 ~ /Assembly/{print $0; getline; gsub($0,"no")}$0 ~ /Reads/{print $0; getline; gsub($0,"yes")}{print $0}' ref_config.file > map_config.file
-cp -s ../../test_set/*.fq.gz .
-cd ..; done
-cd ..; done
+  cd $i
+  for j in $(seq 0.80 0.02 0.98); do
+    if [ ! -s c_$j/reference.fasta ]; then echo "${i}/${j} missing reference"; continue; fi
+    echo "starting" $i $j
+    cd c_${j}
+    mv reference.fasta* ../../tmp
+    mv ref_config.file ../../tmp
+    rm -fr *
+    mv ../../tmp/* .
+    awk '$0 ~ /Assembly/{print $0; getline; gsub($0,"no")}$0 ~ /Reads/{print $0; getline; gsub($0,"yes")}{print $0}' ref_config.file > map_config.file
+    cp -s ../../test_set/*.fq.gz .
+    cd ..
+  done
+  cd ..
+done
 rm -r tmp
 
 #Running the reference testing
 ```{bash}```
 ls -d K1* | while read i; do
-for j in $(seq 0.80 0.02 0.98); do
-if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
-cd ${i}/c_${j}/
-echo "starting" $i $j
-sbatch $WORK/slurm/dDocent_mapping_w_stats.slurm
-done
-cd ../..
+  for j in $(seq 0.80 0.02 0.98); do
+    if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
+    cd ${i}/c_${j}/
+    echo "starting" $i $j
+    sbatch $WORK/slurm/dDocent_mapping_w_stats.slurm
+  done
+  cd ../..
 done
 
 #Gathering mapping stats
 ```{bash}```
 echo -e "K_values\tc-value\tFile\tReference\tTotal\tQC\tMapped\tPaired"> mapping_summary_all.txt
 ls -d K1* | while read i; do
-for j in $(seq 0.80 0.02 0.98); do
-echo $i $j
-if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
-cd ${i}/c_${j}/
-tail -n+2 bwa_mapping_summary.txt | awk -v Kval=$i -v Cval=$j '{print Kval, Cval, $0}'  >> ../../mapping_summary_all.txt
-cd ../..;
-done
+  for j in $(seq 0.80 0.02 0.98); do
+    echo $i $j
+    if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
+    cd ${i}/c_${j}/
+    tail -n+2 bwa_mapping_summary.txt | awk -v Kval=$i -v Cval=$j '{print Kval, Cval, $0}'  >> ../../mapping_summary_all.txt
+    cd ../..;
+  done
 done
 
 tail -n+2 mapping_summary_all.txt |cut -f1 -d" " | awk 'BEGIN{FS="_"; OFS="\t"}{print $2, $4}' > K_values.txt
@@ -122,14 +127,14 @@ sed -i  "1 s/^/K1\tK2\tcvalue\tFile\tTotal\tQC\tMapped\tPaired\n/" mapping_summa
 ```{bash}```
 echo -e "K-values\tcvalue\tcontigs"> ref_summary.txt
 ls -d K1* | while read i; do
-for j in $(seq 0.80 0.02 0.98); do
-echo $i $j
-if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
-cd ${i}/c_${j}/
-TMP=$(grep ">" reference.fasta | wc -l)
-echo -e "$i\t$j\t$TMP" >> ../../ref_summary.txt
-cd ../..
-done
+  for j in $(seq 0.80 0.02 0.98); do
+    echo $i $j
+    if [ ! -s ${i}/c_${j}/reference.fasta ]; then echo "Reference missing from $i $j"; continue; fi
+    cd ${i}/c_${j}/
+    TMP=$(grep ">" reference.fasta | wc -l)
+    echo -e "$i\t$j\t$TMP" >> ../../ref_summary.txt
+    cd ../..
+  done
 done
 
 echo -e "K1\tK2\tc-value\tcontigs"> ref_summary_df.txt
@@ -165,8 +170,7 @@ ggplot(dat, aes(x = cvalue, y = contigs)) +
   theme(panel.grid.major=element_line(color="grey"), 
         panel.border=element_rect(color="black", fill=NA), 
         axis.text.x=element_text(angle=90,hjust=1)) +
-  geom_point() +
-  geom_line() +
+  geom_point() + geom_line() +
   facet_grid(K1 ~ K2, labeller=label_both) +
   labs(x = "% similarity c", y = "no. of contigs in reference")
 
@@ -193,14 +197,14 @@ plot(quart[,1],quart[,2], col="blue", pch=16, ylim=c(min(quart[,2:4]),max(quart[
 points(quart[,1],quart[,3], col="orange", pch=16)
 points(quart[,1],quart[,4], col="red", pch=16)
 
-#Computing the lag based upon 0.2 difference
+#Computing the lag based upon 0.2 difference in c-value
 ```{R}```
 lag1 <- rbind(diff(quart[,4], lag=1), diff(quart[,3], lag=1), diff(quart[,2], lag=1))
 rownames(lag1) <- c("75%", "Median", "25%")
 colnames(lag1) <- c("0.80-0.82", "0.82-0.84", "0.84-0.86", "0.86-0.88", "0.88-0.90", "0.90-0.92", "0.92-0.94", "0.94-0.96", "0.96-0.98")
 lag1
 
-#Computing the lag based upon 0.4 difference
+#Computing the lag based upon 0.4 difference in c-value
 ```{R}```
 lag2 <- rbind(diff(lag1[1,], lag1=1), diff(lag1[2,], lag1=1), diff(lag1[3,], lag1=1))
 rownames(lag2) <- rownames(lag1)
