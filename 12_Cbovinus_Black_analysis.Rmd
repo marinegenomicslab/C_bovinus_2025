@@ -36,33 +36,33 @@ library('ggord')
 ```{R}```
 #Pulls the unique loci names from alleles selected from genind object names (e.g. dDocent_Contig_23960.001)
 Loci_names <- function(NAMES, SEP="[.]", REMOVE=1){
-COL <- length(strsplit(head(NAMES,n=1), SEP)[[1]])
-TMP_U <- unique(matrix(unlist(strsplit(NAMES,SEP)),ncol=COL,byrow=T)[,1:(COL-REMOVE)])
-if(is.matrix(TMP_U)){TMP_DF <- data.frame(TMP_U)
-} else {TMP_DF <- data.frame(matrix(TMP_U, ncol=(COL-REMOVE), byrow=T))}
-return(tidyr::unite(TMP_DF, "loci", 1:ncol(TMP_DF), sep=SEP))
+  COL <- length(strsplit(head(NAMES,n=1), SEP)[[1]])
+  TMP_U <- unique(matrix(unlist(strsplit(NAMES,SEP)),ncol=COL,byrow=T)[,1:(COL-REMOVE)])
+  if(is.matrix(TMP_U)){TMP_DF <- data.frame(TMP_U)
+  } else {TMP_DF <- data.frame(matrix(TMP_U, ncol=(COL-REMOVE), byrow=T))}
+  return(tidyr::unite(TMP_DF, "loci", 1:ncol(TMP_DF), sep=SEP))
 }
 
 #Removing loci for genind object from a vcf; Needs to have "dDocent_Contig_#_Pos" format
 #Could add an option to select the locus list or remove it
 VCF_remove <- function(genind.vcf, loci.list){
-tmp.loci <- matrix(unlist(strsplit(locNames(genind.vcf),"_")), ncol=4, byrow=T)
-if(sum(is.na(tail(tmp.loci, n=1)))){print("locNames(genind) in incorrect format"); break}
-tmp.loci <- data.frame(Locus=paste(tmp.loci[,1], tmp.loci[,2], tmp.loci[,3],sep="_"), Pos=tmp.loci[,4])
+  tmp.loci <- matrix(unlist(strsplit(locNames(genind.vcf),"_")), ncol=4, byrow=T)
+  if(sum(is.na(tail(tmp.loci, n=1)))){print("locNames(genind) in incorrect format"); break}
+  tmp.loci <- data.frame(Locus=paste(tmp.loci[,1], tmp.loci[,2], tmp.loci[,3],sep="_"), Pos=tmp.loci[,4])
 
-tmp <- vector()
-for(i in loci.list){
-ROW <- which(tmp.loci$Locus == i)
-tmp <- append(tmp,paste(tmp.loci$Locus, tmp.loci$Pos, sep="_")[ROW])
-}
+  tmp <- vector()
+  for(i in loci.list){
+    ROW <- which(tmp.loci$Locus == i)
+    tmp <- append(tmp,paste(tmp.loci$Locus, tmp.loci$Pos, sep="_")[ROW])
+  }
 
-set.loc <- subset(locNames(genind.vcf), !locNames(genind.vcf) %in% tmp)
-return(genind.vcf[ ,loc=set.loc])
+  set.loc <- subset(locNames(genind.vcf), !locNames(genind.vcf) %in% tmp)
+  return(genind.vcf[ ,loc=set.loc])
 }
 
 #Importing Data
 ```{R}```
-strata <- read.csv(file = "SNP.TRS.F07.2022-03-10/indv.csv", header = TRUE)
+strata <- read.csv(file = "SNP.TRS.F07.2023-05-16/indv.csv", header = TRUE)
 
 vcf <- read.vcfR(file="SNP.TRS.F07.vcf")
 gen.vcf<-vcfR2genind(vcf)
@@ -91,15 +91,15 @@ gen.list <- seppop(gen, drop=T)
 par(mfrow=c(2,3))
 
 for(i in names(gen.list)){
-tmp.gen <- gen.list[[i]]
-if(nInd(tmp.gen) < 5){next}
-gl <- gi2gl(tmp.gen)
-test.cov <- gl2related(gl, save=F)
-tmp.rel <- coancestry(test.cov, wang =1)$relatedness
-min.list <- c(min.list, min(tmp.rel$wang))
-max.list <- c(max.list, max(tmp.rel$wang))
-hist(tmp.rel$wang, breaks=50, col="red4", main=i)
-assign(paste(i,"rel",sep="_"), tmp.rel)
+  tmp.gen <- gen.list[[i]]
+  if(nInd(tmp.gen) < 5){next}
+  gl <- gi2gl(tmp.gen)
+  test.cov <- gl2related(gl, save=F)
+  tmp.rel <- coancestry(test.cov, wang =1)$relatedness
+  min.list <- c(min.list, min(tmp.rel$wang))
+  max.list <- c(max.list, max(tmp.rel$wang))
+  hist(tmp.rel$wang, breaks=50, col="red4", main=i)
+  assign(paste(i,"rel",sep="_"), tmp.rel)
 }
 
 MIN <- min(min.list)
@@ -112,11 +112,11 @@ rel.list <- NULL
 png("Site_specific_relatedness.png", res=200, width=8000, height=6000)
 par(mfrow=c(2,3))
 for(i in names(gen.list)){
-tmp.gen <- gen.list[[i]]
-if(nInd(tmp.gen) < 10){next}
-tmp.rel <- get(paste(i,"rel",sep="_"))
-rel.list <- rbind(rel.list, tmp.rel[tmp.rel$wang > 0.4,c(2,3,6)])
-hist(tmp.rel$wang, breaks=tmp.break, col="red4", main=i, xlim=c(MIN,MAX), xlab="relatedness")
+  tmp.gen <- gen.list[[i]]
+  if(nInd(tmp.gen) < 10){next}
+  tmp.rel <- get(paste(i,"rel",sep="_"))
+  rel.list <- rbind(rel.list, tmp.rel[tmp.rel$wang > 0.4,c(2,3,6)])
+  hist(tmp.rel$wang, breaks=tmp.break, col="red4", main=i, xlim=c(MIN,MAX), xlab="relatedness")
 }
 dev.off()
 
@@ -125,26 +125,26 @@ dev.off()
 rm.list <- list()
 
 for(i in 1:nrow(rel.list)){
-#Only removing duplicates
-if(rel.list$wang[i] < 0.8){next}
+  #Only removing duplicates
+  if(rel.list$wang[i] < 0.8){next}
 
-j <- as.character(rel.list[i,])
+  j <- as.character(rel.list[i,])
 
-tmp <- gen@strata[gen@strata$relate.ID %in% j, ]
-tmp$Diff <- abs(as.numeric(as.character(tmp[ , "E.HOM."])) - as.numeric(as.character(tmp[ , "O.HOM."])))
+  tmp <- gen@strata[gen@strata$relate.ID %in% j, ]
+  tmp$Diff <- abs(as.numeric(as.character(tmp[ , "E.HOM."])) - as.numeric(as.character(tmp[ , "O.HOM."])))
 
-Miss.tab <- table(as.numeric(as.character(tmp$N_MISS)))
-Depth.tab <- table(as.numeric(as.character(tmp$MEAN_DEPTH)))
+  Miss.tab <- table(as.numeric(as.character(tmp$N_MISS)))
+  Depth.tab <- table(as.numeric(as.character(tmp$MEAN_DEPTH)))
 
-MIN.Miss <- min(as.numeric(names(Miss.tab)))
-MAX.Depth <- max(as.numeric(names(Depth.tab)))
+  MIN.Miss <- min(as.numeric(names(Miss.tab)))
+  MAX.Depth <- max(as.numeric(names(Depth.tab)))
 
-if(Miss.tab[names(Miss.tab)==MIN.Miss]==1 && Depth.tab[names(Depth.tab)==MAX.Depth]==1){keep <- as.character(tmp[tmp$N_MISS==MIN.Miss,1])
-} else {keep <- as.character(tmp[tmp$Diff == min(tmp$Diff),1])}
-print(keep)
+  if(Miss.tab[names(Miss.tab)==MIN.Miss]==1 && Depth.tab[names(Depth.tab)==MAX.Depth]==1){keep <- as.character(tmp[tmp$N_MISS==MIN.Miss,1])
+  } else {keep <- as.character(tmp[tmp$Diff == min(tmp$Diff),1])}
+  print(keep)
 
-rm.list[[i]] <- as.character(tmp[grep(keep, tmp$INDV, invert=T),1])
-rm(keep, tmp)
+  rm.list[[i]] <- as.character(tmp[grep(keep, tmp$INDV, invert=T),1])
+  rm(keep, tmp)
 }
 
 set.ind <- subset(indNames(gen), !indNames(gen) %in% rm.list)
@@ -227,13 +227,12 @@ par(mfrow=c(1,1))
 tmp.dat <- cbind(gen3@strata, pca1$li[match(gen3@strata$INDV, rownames(pca1$li)),])
 
 p.net_POP <- ggplot() + geom_point(data=tmp.dat, aes(x=Axis1, y=Axis2, fill=POP), pch=21, size=3) + scale_fill_manual(values=funky(5)) + theme_classic() + 
-labs(x=paste("PC1: ",sprintf("%.2f",(pca1$eig[1]/sum(pca1$eig))*100)," %", sep=""), y=paste("PC2: ",sprintf("%.2f",(pca1$eig[2]/sum(pca1$eig))*100)," %", sep="")) +
-guides(fill=guide_legend(title="Sites", override.aes = list(shape = 23))) + 
-ggtitle(paste("Neutral data (n=",length(locNames(gen3))," loci)", sep="")) + 
-stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(5)) + guides(color="none")
+  labs(x=paste("PC1: ",sprintf("%.2f",(pca1$eig[1]/sum(pca1$eig))*100)," %", sep=""), y=paste("PC2: ",sprintf("%.2f",(pca1$eig[2]/sum(pca1$eig))*100)," %", sep="")) +
+  guides(fill=guide_legend(title="Sites", override.aes = list(shape = 23))) + 
+  ggtitle(paste("Neutral data (n=",length(locNames(gen3))," loci)", sep="")) + 
+  stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(5)) + guides(color="none")
 p.net_POP
 
-ggsave(p.net_POP, file="PCA_gennet_POP_v2.png", device="png")
 ggsave(p.net_POP, file="PCA_gennet_POP_v2.svg", device="svg")
 
 X.out <- scaleGen(gen3.out, NA.method="mean", scale=F)
@@ -244,13 +243,12 @@ par(mfrow=c(1,1))
 tmp.dat <- cbind(gen3.out@strata, pca.out$li[match(gen3.out@strata$INDV, rownames(pca.out$li)),])
 
 p.out_POP <- ggplot() + geom_point(data=tmp.dat, aes(x=Axis1, y=Axis2, fill=POP), pch=21, size=3) + scale_fill_manual(values=funky(5)) + theme_classic() + 
-labs(x=paste("PC1: ",sprintf("%.2f",(pca.out$eig[1]/sum(pca.out$eig))*100)," %", sep=""), y=paste("PC2: ",sprintf("%.2f",(pca.out$eig[2]/sum(pca.out$eig))*100)," %", sep="")) +
-guides(fill=guide_legend(title="Sites", override.aes = list(shape = 23))) + 
-ggtitle(paste("Outlier data (n=",length(locNames(gen3.out))," loci)", sep="")) + 
-stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(5)) + guides(color="none")
+  labs(x=paste("PC1: ",sprintf("%.2f",(pca.out$eig[1]/sum(pca.out$eig))*100)," %", sep=""), y=paste("PC2: ",sprintf("%.2f",(pca.out$eig[2]/sum(pca.out$eig))*100)," %", sep="")) +
+  guides(fill=guide_legend(title="Sites", override.aes = list(shape = 23))) + 
+  ggtitle(paste("Outlier data (n=",length(locNames(gen3.out))," loci)", sep="")) + 
+  stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(5)) + guides(color="none")
 p.out_POP
 
-ggsave(p.out_POP, file="PCA_genout_POP_v2.png", device="png")
 ggsave(p.out_POP, file="PCA_genout_POP_v2.svg", device="svg")
 
 #Exporting for NeEstimator and Arleqiun
