@@ -6,20 +6,22 @@ cp K1_1_K2_2/c_0.88/reference.fasta ./Cyprinodon_reference.fasta
 #Mapping
 #Mapping data
 ```{bash}```
+SLURM_DIR=$(echo "$SLURM_DIR")
+
 cd ../data
 find ./I* -type d > ../mapping/dirs.txt; cd ../mapping; xargs mkdir -p < dirs.txt; rm dirs.txt
 
-ls | while read i; do cd $i; cp -s ../../data/$i/*.fq.gz .; cp -s ../../reference/Cyprinodon_reference.fasta ./reference.fasta; cp -s $WORK/slurm/map_config.file .; cd ..; done
-ls | while read i; do cd $i; sbatch $WORK/slurm/dDocent_mapping.slurm; cd ..; sleep 5; done
+ls | while read i; do cd $i; cp -s ../../data/$i/*.fq.gz .; cp -s ../../reference/Cyprinodon_reference.fasta ./reference.fasta; cp -s $SLURM_DIR/map_config.file .; cd ..; done
+ls | while read i; do cd $i; sbatch $SLURM_DIR/dDocent_mapping.slurm; cd ..; sleep 5; done
 
 #Filtering bam files
 ```{bash}```
-ls | while read i; do cd $i; sbatch $WORK/slurm/dDocent_bamfiltering.slurm; cd ..; sleep 5; done
+ls | while read i; do cd $i; sbatch $SLURM_DIR/dDocent_bamfiltering.slurm; cd ..; sleep 5; done
 
 #Making coverage files for all data
 #Run on normal nodes, scripted to limit to 10 nodes
 ```{bash}```
-ls | while read i; do cd $i; sbatch $WORK/slurm/dDocent_cov.slurm; cd ..; sleep 5; done
+ls | while read i; do cd $i; sbatch $SLURM_DIR/dDocent_cov.slurm; cd ..; sleep 5; done
 
 #Preparing folder for SNP calling
 ```{bash}```
@@ -29,23 +31,23 @@ mkdir tmp
 ls ../mapping | while read i; do echo $i; cp -s ../mapping/$i/*.bam* .; rm *cat*; done
 ls ../mapping | while read i; do echo $i; cp -s ../mapping/$i/*.cov.stats .; done
 ls ../mapping | while read i; do echo $i; cat ../mapping/$i/mapped.bed >> all_mapped.bed; done
-sbatch $WORK/slurm/dDocent_bed.slurm
+sbatch $SLURM_DIR/dDocent_bed.slurm
 
 ls *.bam | sed 's/.bam//g' > namelist
 cut -f1 -d "_" namelist > p; paste namelist p > popmap; rm p
-sbatch $WORK/slurm/dDocent_cat.slurm
+sbatch $SLURM_DIR/dDocent_cat.slurm
 
 #Splitting cat.bam for SNP calling
 #Number of nodes used is determined by this split script
 ```{bash}```
-sbatch --export=NODES=8 $WORK/slurm/dDocent_split.slurm
+sbatch --export=NODES=8 $SLURM_DIR/dDocent_split.slurm
 for i in $(seq 1 8); do cd $i.node; cp -fs ../cat-RRG.bam* .; cd ..; done
 ls -d *.node | while read i; do cd $i; cp -s ../../reference/Cyprinodon_reference.fasta ./reference.fasta; cd .. ; done
 
 #SNP calling
 ```{bash}```
 ulimit -s 81920
-ls -d *.node | while read i; do cd $i; ulimit -s 81920; sbatch $WORK/slurm/dDocent_freebayes.slurm; cd ..; sleep 2; done
+ls -d *.node | while read i; do cd $i; ulimit -s 81920; sbatch $SLURM_DIR/dDocent_freebayes.slurm; cd ..; sleep 2; done
 
 #Checking to see if nodes have the correct number of vcf files with data in them
 ```{bash}```
@@ -57,7 +59,7 @@ ls -d *.node | while read i; do echo "checking $i"; cd $i; ls raw.*.vcf | while 
 
 #Combine all vcfs in each node
 ```{bash}```
-ls -d *.node | while read i; do cd $i; sbatch $WORK/slurm/dDocent_combine_node.slurm; cd ..; sleep 5; done
+ls -d *.node | while read i; do cd $i; sbatch $SLURM_DIR/dDocent_combine_node.slurm; cd ..; sleep 5; done
 
 #Preparing to combine all the vcf files
 ```{bash}```
@@ -65,10 +67,10 @@ mkdir vcf
 cd vcf
 
 ls -d ../*.node | while read i; do 
-NODE=$(echo $i | sed 's:../::g' | cut -f1 -d .)
-cp -fs $i/cat.vcf ./raw.$NODE.vcf
+  NODE=$(echo $i | sed 's:../::g' | cut -f1 -d .)
+  cp -fs $i/cat.vcf ./raw.$NODE.vcf
 done
 
 #Combining all the vcf files
 ```{bash}```
-sbatch $WORK/slurm/dDocent_combine.slurm
+sbatch $SLURM_DIR/dDocent_combine.slurm
