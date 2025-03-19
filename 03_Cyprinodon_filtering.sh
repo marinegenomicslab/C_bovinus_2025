@@ -5,21 +5,26 @@ sed -i 's/-RG//g' popmap
 charts.sh TotalRawSNPs.vcf &
 
 #Split Multiallelic Freebayes calls
+```{bash}```
 vcfallelicprimitives -k -g TotalRawSNPs.vcf | sed 's:\.|\.:\.\/\.:g' > TRS.prim
 
 #Remove indels
+```{bash}```
 vcftools --vcf TRS.prim --recode-INFO-all --recode --out SNP.TRS --remove-indels
 
 #Basic quality filters of data (Minimum of 2 alleles, Depth of at least 5, Minimum quality of at least 20)
+```{bash}```
 vcftools --vcf SNP.TRS.recode.vcf --out SNP.TRS.QC --recode --recode-INFO-all --min-alleles 2 --minDP 5 --minQ 20 --min-meanDP 20
 
 #Filters allelic balance, quality vs depth, strand representation and paired read representation
+```{bash}```
 dDocent_filters SNP.TRS.QC.recode.vcf SNP.TRS.dDocent
 ## Interactive input
 # no
 # yes; 100000
 
 #Filtering singleton and doubleton loci for depth (Singletons >20 reads; Doubletons > 10 reads)
+```{bash}```
 vcftools --vcf SNP.TRS.dDocent.FIL.recode.vcf --out out --singletons
 
 awk ' $3=="S" {print $1, $2}' out.singletons > sing.loci
@@ -39,6 +44,7 @@ vcf-concat SNP.TRS.F02.sing.recode.vcf SNP.TRS.F02.doub.recode.vcf SNP.TRS.F01b.
 rm out.singletons
 
 #Filter loci that have high variation in depth across a locus with an individual
+```{bash}```
 vcftools --vcf SNP.TRS.F02.vcf --out out --geno-depth
 
 ```{R}```
@@ -65,17 +71,20 @@ vcftools --vcf SNP.TRS.F02.vcf  --out SNP.TRS.F03 --exclude-positions bad.loci -
 charts.sh SNP.TRS.F03.recode.vcf
 
 #Filter data using decision tree
+```{bash}```
 mkdir SOL
 cp SNP.TRS.F03.recode.vcf SOL/
 cd SOL
 SOL.filter1.sh SNP.TRS.F03.recode.vcf
 
 #Getting best filtering
+```{bash}```
 cp vcf/A.1.1.1.2.2.3.1.2.SNP.finalb.1.recode.vcf ../
 cd ..
 charts.sh A.1.1.1.2.2.3.1.2.SNP.finalb.1.recode.vcf
 
 #Removing loci with super high depth
+```{bash}```
 dDocent_filters A.1.1.1.2.2.3.1.2.SNP.finalb.1.recode.vcf SNP.TRS.F04
 ## Interactive input
 # no
@@ -84,6 +93,7 @@ dDocent_filters A.1.1.1.2.2.3.1.2.SNP.finalb.1.recode.vcf SNP.TRS.F04
 charts.sh SNP.TRS.F04.FIL.recode.vcf
 
 #Filtering individuals with > 20% missing data
+```{bash}```
 vcftools --vcf SNP.TRS.F04.FIL.recode.vcf --out SNP.TRS.F04.FIL --missing-indv
 mawk -v x=0.2 '$5 > x' SNP.TRS.F04.FIL.imiss | cut -f1 > lowDP.indv
 vcftools --vcf SNP.TRS.F04.FIL.recode.vcf --out SNP.TRS.F05 --remove lowDP.indv --recode --recode-INFO-all
@@ -91,6 +101,7 @@ vcftools --vcf SNP.TRS.F04.FIL.recode.vcf --out SNP.TRS.F05 --remove lowDP.indv 
 charts.sh SNP.TRS.F05.recode.vcf
 
 #Removing paralogs and indivduals with high missing data#
+```{bash}```
 mkdir haplotyping
 cd haplotyping
 
