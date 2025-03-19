@@ -1,25 +1,4 @@
 ###### Preparing Cyprinodon reference ######
-#Make a record of the samples extracted and how many reads in each
-```{bash}```
-if [ -a read_log.txt ]; then rm read_log.txt; fi
-ls -d I* | while read i; do
-DIR=$(echo $i | cut -f1 -d"/")
-IND=$(ls $i/*.log | cut -f1 -d"_")
-BAR=$(ls $i/*_barcodes.txt | cut -f1 -d"_" | cut -f2 -d"/")
-awk -v DIR=$DIR -v IND=$BAR -v FS=" " -v OFS="\t" 'NF==5{print IND, $0, DIR}' $i/*.log | tail -n+3 >> read_log.txt
-done
-sed -i '1 s/^/Index\tBarcode\tTotal\tNo_Radtag\tLow_Quality\tRetained\tDirectory\n/' read_log.txt
-
-#Adding sample names to read_log.txt
-```{R}```
-log.dat <- as.data.frame(read.table("read_log.txt", head=T, sep="\t"))
-meta.dat <- read.table("demultiplex_Cyp_Lib1.txt", head=F)
-tmp.v <- NULL
-for(i in 1:nrow(log.dat)){
-tmp.name <- meta.dat[which(meta.dat[,2] == log.dat$Barcode & meta.dat[,3] == log.dat$Index), 1]
-tmp.v <- c(tmp.v, tmp.name)
-}
-log.dat$Sample <- tmp.v
 
 #Trimming reads
 ```{bash}```
