@@ -6,7 +6,7 @@ cp K1_1_K2_2/c_0.88/reference.fasta ./Cyprinodon_reference.fasta
 #Mapping
 #Mapping data
 ```{bash}```
-SLURM_DIR=$(echo "$SLURM_DIR")
+SLURM_DIR=$(echo "$WORK/slurm")
 
 cd ../data
 find ./I* -type d > ../mapping/dirs.txt; cd ../mapping; xargs mkdir -p < dirs.txt; rm dirs.txt
