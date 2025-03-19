@@ -94,4 +94,26 @@ cp -s ../popmap .
 cp -s ../../../mapping/*.bam* .
 cp -s ../SNP.TRS.F04.FIL.recode.vcf .
 
-rad_haplotyper.pl -v SNP.TRS.F04.FIL.recode.vcf -r reference.fasta -p popmap -x 15 -m 0.8 -o SNP.TRS.F05.vcf -g SNP.TRS.F05.gen
+rad_haplotyper.pl -v SNP.TRS.F04.FIL.recode.vcf -r reference.fasta -p popmap -x 15 -m 0.8 -o SNP.TRS.F05.vcf
+
+cd ..
+cp haplotyping/SNP.TRS.F05.vcf .
+charts.sh SNP.TRS.F05.vcf
+
+mawk '/para/' stats.out > para.log
+grep "dDocent" SNP.TRS.F05.vcf | cut -f 1,2 | uniq | tail -n +2 > contigs.txt
+grep -wf para.log contigs.txt > para.loci
+
+awk '$7<0.8{print $1}' ind_stats.out > lowDP.indv
+
+vcftools --vcf SNP.TRS.F05.vcf --out SNP.TRS.F06 --recode --recode-INFO-all --remove haplotyping/lowDP.indv --exclude-positions haplotyping/para.loci
+charts.sh SNP.TRS.F06.recode.vcf
+
+#Making Haplotyped data
+```{bash}```
+cd haplotyping
+cp -s ../SNP.TRS.F06.recode.vcf .
+
+rad_haplotyper.pl -v SNP.TRS.F06.recode.vcf -r reference.fasta -p popmap -x 15 -m 0.8 -o SNP.TRS.F07.vcf -g SNP.TRS.F07.gen
+
+charts.sh SNP.TRS.F07.vcf
