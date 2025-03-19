@@ -1,22 +1,10 @@
 #Trimming data
 ```{bash}```
-cp -s $WORK/slurm/trim_config.file .
+SLURM_DIR=$(echo "$WORK/slurm")
+
+cp -s $SLURM_DIR/trim_config.file .
 cp -s ../../reference/Cbovinus_reference.fasta ./reference.fasta
-sbatch $WORK/slurm/dDocent_trimming.slurm
-
-#Evaluating trimming
-```{bash}```
-echo -e "Sample\tRead1_pretrim\tRead1_trim\tRead2_pretrim\tRead2_trim\tDup_per" > trim_log.txt
-
-ls logfiles/*.trim.log | while read i; do
-SAMP=$(echo $i | cut -f2 -d "/" | cut -f1 -d".")
-R1p=$(grep -A1 "Read1 before" $i | tail -n1 | cut -f3 -d" ")
-R1t=$(grep -A1 "Read1 after" $i | tail -n1 | cut -f3 -d" ")
-R2p=$(grep -A1 "Read2 before" $i | tail -n1 | cut -f3 -d" ")
-R2t=$(grep -A1 "Read2 after" $i | tail -n1 | cut -f3 -d" ")
-DUP=$(grep Duplication $i | cut -f3 -d" ")
-echo -e "$SAMP\t$R1p\t$R1t\t$R2p\t$R2t\t$DUP" >> trim_log.txt
-done
+sbatch $SLURM_DIR/dDocent_trimming.slurm
 
 #Making mapping directories
 ```{bash}```
@@ -28,17 +16,17 @@ mkdir Black
 cd Black
 cp -s ../../data/Black/*.fq.gz .
 cp -s ../../reference/Cbovinus_reference.fasta ./reference.fasta
-cp -s $WORK/slurm/map_config.file .
-sbatch $WORK/slurm/dDocent_mapping.slurm
-sbatch $WORK/slurm/Map_sum.slurm
+cp -s $SLURM_DIR/map_config.file .
+sbatch $SLURM_DIR/dDocent_mapping.slurm
+sbatch $SLURM_DIR/Map_sum.slurm
 
 #Filtering bam files
 ```{bash}```
-sbatch $WORK/slurm/dDocent_bamfiltering.slurm
+sbatch $SLURM_DIR/dDocent_bamfiltering.slurm
 
 #Making coverage files for all data
 ```{bash}```
-sbatch $WORK/slurm/dDocent_cov.slurm
+sbatch $SLURM_DIR/dDocent_cov.slurm
 
 #Preparing folder for SNP calling
 ```{bash}```
@@ -55,7 +43,7 @@ tail -n+49 namelist | while read i; do rm ${i}*; done
 
 #Making the mapped.bed file
 ```{bash}```
-sbatch $WORK/slurm/dDocent_bed.slurm
+sbatch $SLURM_DIR/dDocent_bed.slurm
 
 #Preparing popmap
 ```{bash}```
@@ -65,17 +53,17 @@ cut -f1 -d "_" namelist > p; paste namelist p > popmap; rm p
 sed -i 's/\tSamp/\tBlack/g' popmap
 sed -i 's/-RG//g' popmap
 nano popmap		#Changing Samp pop to Samp2 for Black samples 73-92
-sbatch $WORK/slurm/dDocent_cat.slurm
+sbatch $SLURM_DIR/dDocent_cat.slurm
 
 #Splitting cat.bam for SNP calling
 ```{bash}```
-sbatch --export=NODES=8 $WORK/slurm/dDocent_split.slurm
+sbatch --export=NODES=8 $SLURM_DIR/dDocent_split.slurm
 ls -d *.node | while read i; do cd $i; cp -s ../../reference/Cbovinus_reference.fasta ./reference.fasta; cd .. ; done
 
 #SNP calling on normal nodes, scripted to limit to 8 nodes
 ```{bash}```
 ulimit -s 81920
-ls -d *.node | while read i; do cd $i; ulimit -s 81920; sbatch $WORK/slurm/dDocent_freebayes.slurm; cd ..; sleep 2; done
+ls -d *.node | while read i; do cd $i; ulimit -s 81920; sbatch $SLURM_DIR/dDocent_freebayes.slurm; cd ..; sleep 2; done
 
 #Checking to see if nodes have the correct number of vcf files with data in them
 ```{bash}```
@@ -87,7 +75,7 @@ ls -d *.node | while read i; do echo "checking $i"; cd $i; ls raw.*.vcf | while 
 
 #Combine all vcfs in each node
 ```{bash}```
-ls -d *.node | while read i; do cd $i; sbatch $WORK/slurm/dDocent_combine_node.slurm; cd ..; sleep 5; done
+ls -d *.node | while read i; do cd $i; sbatch $SLURM_DIR/dDocent_combine_node.slurm; cd ..; sleep 5; done
 
 #Preparing to combine all the vcf files
 ```{bash}```
@@ -101,4 +89,4 @@ done
 
 #Combining all the vcf files
 ```{bash}```
-sbatch $WORK/slurm/dDocent_combine.slurm
+sbatch $SLURM_DIR/dDocent_combine.slurm
