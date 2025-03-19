@@ -42,7 +42,7 @@ sbatch --export=NODES=8 $WORK/slurm/dDocent_split.slurm
 for i in $(seq 1 8); do cd $i.node; cp -fs ../cat-RRG.bam* .; cd ..; done
 ls -d *.node | while read i; do cd $i; cp -s ../../reference/Cyprinodon_reference.fasta ./reference.fasta; cd .. ; done
 
-#SNP calling on normal nodes, scripted to limit to 8 nodes
+#SNP calling
 ```{bash}```
 ulimit -s 81920
 ls -d *.node | while read i; do cd $i; ulimit -s 81920; sbatch $WORK/slurm/dDocent_freebayes.slurm; cd ..; sleep 2; done
