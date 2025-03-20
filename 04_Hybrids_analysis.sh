@@ -17,7 +17,7 @@ for i in $(seq 1 5); do mkdir run_$i; done
 for i in $(seq 1 5); do 
    echo "Processing run $i"
    cd run_$i
-   Rscript ~/bin/NewHybrids_vcf_to_txt.r ../SNP.TRS.F06.vcf newhybrids_input_bovxvar.txt
+   Rscript ~/bin/NewHybrids_vcf_to_txt.r ../../SNP.TRS.F06.vcf newhybrids_input_bovxvar.txt
    cd ..
 done
 
