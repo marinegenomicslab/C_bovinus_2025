@@ -24,7 +24,7 @@ done
 #Adding header
 ```{bash}```
 for i in $(seq 1 5); do 
-   INDV=$(vcfsamplenames SNP.TRS.F06.vcf | wc -l);
+   INDV=$(vcfsamplenames ../SNP.TRS.F06.vcf | wc -l);
    sed -i "1 s/^/NumIndivs $INDV\nNumLoci 150\nDigits 1\nFormat Lumped\n\n/" run_$i/newhybrids_input_bovxvar.txt;
 done
 
@@ -39,7 +39,6 @@ for i in $(seq 1 5); do
    sleep 5
    cd ..
 done
-}
 
 #Formatting the output data
 ```{bash}```
@@ -49,7 +48,7 @@ for i in $(seq 1 5); do
    sed -i "1 s/^/Indv\n/" tmp.indv
    paste tmp.indv aa-ScaledLikelihood.txt > aa-ScaledLikelihood_indv.txt
    rm tmp.indv
-   Rscript ~/bin/NewHybrids_results_format.r C.bovinus ../Cbov.txt C.variegatus ../Cvar.txt
+   Rscript ~/bin/NewHybrids_results_format.r C.bovinus ../../Cbov.txt C.variegatus ../../Cvar.txt
    cd ..
 done
 
