@@ -63,6 +63,8 @@ VCF_remove <- function(genind.vcf, loci.list){
 #Importing Data
 ```{R}```
 strata <- read.csv(file = "SNP.TRS.F07.2023-05-16/indv.csv", header = TRUE)
+strata$POP2 <- strata$POP
+strata$POP2[strata$POP2 %in% c("Cyb-FLS","Cyb-HEAD")] <- "Cyb-DY"
 
 vcf <- read.vcfR(file="SNP.TRS.F07.vcf")
 gen.vcf<-vcfR2genind(vcf)
@@ -253,9 +255,23 @@ ggsave(p.out_POP, file="PCA_genout_POP_v2.svg", device="svg")
 
 #Exporting for NeEstimator and Arleqiun
 ```{R}```
-setPop(gen3)<-~POP
+setPop(gen3) <- ~POP2
 writeGenPop(gen3, "Black.Final_net.gen", "Neutral C. bovinus data without dups by POP")
 
 #Convert to Arlequin format
 ```{bash}```
 java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile Black.Final_net.gen -inputformat GENEPOP -outputfile Black.Final_net.arp -outputformat Arlequin -spid ~/bin/genepop_to_arlequin_STD.spid
+
+#Exporting for temporal Ne estimates
+```{R}```
+#USFW samples
+set.indv <- gen3@strata$INDV[gen3@strata$POP2 %in% c("Black_USFW","Cyb-USFW")]
+gen.tmp <- gen3[set.indv, , drop=T]
+setPop(gen.tmp) <- ~POP2
+writeGenPop(gen.tmp, "Black.USFW_net.gen", "Refuge C. bovinus data without dups by POP2")
+
+#Wild samples
+set.indv <- gen3@strata$INDV[gen3@strata$POP2 %in% c("Black_DY","Cyb-DY")]
+gen.tmp <- gen3[set.indv, , drop=T]
+setPop(gen.tmp) <- ~POP2
+writeGenPop(gen.tmp, "Black.DY_net.gen", "Wild C. bovinus data without dups by POP2")
