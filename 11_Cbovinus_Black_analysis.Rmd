@@ -66,12 +66,6 @@ strata <- read.csv(file = "SNP.TRS.F07.2023-05-16/indv.csv", header = TRUE)
 strata$POP2 <- strata$POP
 strata$POP2[strata$POP2 %in% c("Cyb-FLS","Cyb-HEAD")] <- "Cyb-DY"
 
-vcf <- read.vcfR(file="SNP.TRS.F07.vcf")
-gen.vcf<-vcfR2genind(vcf)
-strata(gen.vcf) <- strata[match(indNames(gen.vcf),strata$INDV),]
-head(strata(gen.vcf))
-rm(vcf)
-
 gen <- read.genepop(file = "SNP.TRS.F07.gen", ncode=3L, quiet = FALSE)
 strata(gen) <- strata[match(indNames(gen),strata$INDV),]
 head(strata(gen))
@@ -88,9 +82,9 @@ head(strata(gen))
 ```{R}```
 min.list <- max.list <- NULL
 
-setPop(gen) <- ~POP
+setPop(gen) <- ~POP2
 gen.list <- seppop(gen, drop=T)
-par(mfrow=c(2,3))
+par(mfrow=c(2,2))
 
 for(i in names(gen.list)){
   tmp.gen <- gen.list[[i]]
@@ -112,7 +106,7 @@ tmp.break <- seq(MIN,MAX,(MAX-MIN)/100)
 rel.list <- NULL
 
 png("Site_specific_relatedness.png", res=200, width=8000, height=6000)
-par(mfrow=c(2,3))
+par(mfrow=c(2,2))
 for(i in names(gen.list)){
   tmp.gen <- gen.list[[i]]
   if(nInd(tmp.gen) < 10){next}
@@ -156,22 +150,6 @@ gen2.vcf <- gen.vcf[set.ind, ]
 
 save(gen2, file="gen2.gz", commpress=T)
 #load("gen2.gz")
-save(gen2.vcf, file="gen2.vcf.gz", commpress=T)
-#load("gen2.vcf.gz")
-
-#Outlier Detection (Outflank)
-```{R}```
-setPop(gen2.vcf) <- ~POP
-tmp <- gl.outflank(gen2.vcf, qthreshold = 0.1)
-length(which(tmp$outflank$results[15]=="TRUE" & tmp$outflank$results[11]=="goodH"))
-
-outliers <- tmp$outflank$results[which(tmp$outflank$results[15]=="TRUE" & tmp$outflank$results[11]=="goodH"),1]
-out.list <- matrix(unlist(strsplit(as.vector(outliers),"[.]")),ncol=2,byrow=T)[,1]
-tmp <- matrix(unlist(strsplit(as.vector(outliers),"[_]")),ncol=4,byrow=T)
-gen.out.list<-unique(paste(tmp[,1],tmp[,2],tmp[,3],sep="_"))
-length(gen.out.list) 
-
-write.table(gen.out.list, "Outflank_outlier.list", quote=F, col.names=F, row.names=F)
 
 #Fst Outliers (Bayescan)
 ```{R}```
@@ -187,7 +165,6 @@ java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile Black.Final_all.gen -inpu
 ```{bash}```
 mkdir Bayescan
 bayescan Black.Final_all.BS -od ./Bayescan -all-trace -threads 15 -thin 100 -nbp 30 -pr_odds 100
- #notepad cleanup
 
 #Analyzing results
 ```{bash}```
@@ -202,21 +179,15 @@ awk 'NR==1{next;} $4 < 0.05' fst_out.txt | cut -f1 -d" "> Bayescan_Outliers.list
 
 #Gathering Outlier loci
 ```{R}```
-setPop(gen2) <- ~POP
-
 #Outlier Loci
-OF.out <- read.table("Outflank_outlier.list", head=F)[,1]
 BS.out <- read.table("Bayescan/Bayescan_Outliers.list", head=F)[,1]
 
-out.list <- unique(c(OF.out, BS.out))
-length(out.list)
-
-set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% out.list))]
+set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% BS.out))]
 gen3 <- gen2[, loc=set.loc]
 gen3.vcf <- VCF_remove(gen2.vcf, gen.out.list)
 
-gen3.out <- gen2[, loc=out.list]
-set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% out.list))]
+gen3.out <- gen2[, loc=BS.out]
+set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% BS.out))]
 gen3.out.vcf <- VCF_remove(gen2.vcf, set.loc)
 
 #PCA
@@ -228,30 +199,30 @@ setPop(gen3) <- ~POP
 par(mfrow=c(1,1))
 tmp.dat <- cbind(gen3@strata, pca1$li[match(gen3@strata$INDV, rownames(pca1$li)),])
 
-p.net_POP <- ggplot() + geom_point(data=tmp.dat, aes(x=Axis1, y=Axis2, fill=POP), pch=21, size=3) + scale_fill_manual(values=funky(5)) + theme_classic() + 
-  labs(x=paste("PC1: ",sprintf("%.2f",(pca1$eig[1]/sum(pca1$eig))*100)," %", sep=""), y=paste("PC2: ",sprintf("%.2f",(pca1$eig[2]/sum(pca1$eig))*100)," %", sep="")) +
+p.net_POP <- ggplot() + geom_point(data=tmp.dat, aes(x=Axis1, y=Axis2, fill=POP2), pch=21, size=3) + scale_fill_manual(values=funky(5),labels=c("HWILD", "HREF", "CWILD", "CREF")) +
+  theme_classic() + labs(x=paste("PC1: ",sprintf("%.2f",(pca1$eig[1]/sum(pca1$eig))*100)," %", sep=""), y=paste("PC2: ",sprintf("%.2f",(pca1$eig[2]/sum(pca1$eig))*100)," %", sep="")) +
   guides(fill=guide_legend(title="Sites", override.aes = list(shape = 23))) + 
   ggtitle(paste("Neutral data (n=",length(locNames(gen3))," loci)", sep="")) + 
-  stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(5)) + guides(color="none")
+  stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP2, col=POP2)) + scale_color_manual(values=funky(5)) + guides(color="none")
 p.net_POP
 
-ggsave(p.net_POP, file="PCA_gennet_POP_v2.svg", device="svg")
+ggsave(p.net_POP, file="Black_PCA_net_POP2.svg", device="svg")
 
 X.out <- scaleGen(gen3.out, NA.method="mean", scale=F)
 pca.out <- dudi.pca(X.out,cent=T,scale=T,scannf=FALSE,nf=5000)
-setPop(gen3.out) <- ~POP
+setPop(gen3.out) <- ~POP2
 
 par(mfrow=c(1,1))
 tmp.dat <- cbind(gen3.out@strata, pca.out$li[match(gen3.out@strata$INDV, rownames(pca.out$li)),])
 
-p.out_POP <- ggplot() + geom_point(data=tmp.dat, aes(x=Axis1, y=Axis2, fill=POP), pch=21, size=3) + scale_fill_manual(values=funky(5)) + theme_classic() + 
+p.out_POP <- ggplot() + geom_point(data=tmp.dat, aes(x=Axis1, y=Axis2, fill=POP2), pch=21, size=3) + scale_fill_manual(values=funky(5),labels=c("HWILD", "HREF", "CWILD", "CREF")) +
   labs(x=paste("PC1: ",sprintf("%.2f",(pca.out$eig[1]/sum(pca.out$eig))*100)," %", sep=""), y=paste("PC2: ",sprintf("%.2f",(pca.out$eig[2]/sum(pca.out$eig))*100)," %", sep="")) +
-  guides(fill=guide_legend(title="Sites", override.aes = list(shape = 23))) + 
+  guides(fill=guide_legend(title="Sites", override.aes = list(shape = 23))) + theme_classic() +
   ggtitle(paste("Outlier data (n=",length(locNames(gen3.out))," loci)", sep="")) + 
-  stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(5)) + guides(color="none")
+  stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP2, col=POP2)) + scale_color_manual(values=funky(5)) + guides(color="none")
 p.out_POP
 
-ggsave(p.out_POP, file="PCA_genout_POP_v2.svg", device="svg")
+ggsave(p.out_POP, file="Black_PCA_out_POP2.svg", device="svg")
 
 #Exporting for NeEstimator and Arleqiun
 ```{R}```
