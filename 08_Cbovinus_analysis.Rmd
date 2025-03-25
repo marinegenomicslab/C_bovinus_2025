@@ -31,6 +31,7 @@ library('PopGenReport')
 library('sdmpredictors') 
 library('ggord')
 library('coin')
+library('pantomime')
 
 #Add functions
 ```{R}```
@@ -231,11 +232,11 @@ tmp.dat <- cbind(gen3@strata, pca1$li[match(gen3@strata$INDV, rownames(pca1$li))
 p.net_POP <- ggplot() + geom_point(data=tmp.dat, aes(x=Axis1, y=Axis2, fill=POP), pch=21, size=3) + scale_fill_manual(values=funky(3)) + theme_classic() + 
   labs(x=paste("PC1: ",sprintf("%.2f",(pca1$eig[1]/sum(pca1$eig))*100)," %", sep=""), y=paste("PC2: ",sprintf("%.2f",(pca1$eig[2]/sum(pca1$eig))*100)," %", sep="")) +
   guides(fill=guide_legend(title="Sites", override.aes = list(shape = 23))) + 
-  ggtitle(paste("Neutral data (n=",length(locNames(gen3))," loci)", sep=""))
-  stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(5)) + guides(color="none")
+  ggtitle(paste("Neutral data (n=",length(locNames(gen3))," loci)", sep="")) +
+  stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(3)) + guides(color="none")
 p.net_POP
 
-ggsave(p.net_POP, file="PCA_gennet_POP_v2.svg", device="svg")
+ggsave(p.net_POP, file="PCA_gennet_POP.svg", device="svg")
 
 X.out <- scaleGen(gen3.out, NA.method="mean", scale=F)
 pca.out <- dudi.pca(X.out,cent=T,scale=T,scannf=FALSE,nf=5000)
@@ -247,11 +248,11 @@ tmp.dat <- cbind(gen3.out@strata, pca.out$li[match(gen3.out@strata$INDV, rowname
 p.out_POP <- ggplot() + geom_point(data=tmp.dat, aes(x=Axis1, y=Axis2, fill=POP), pch=21, size=3) + scale_fill_manual(values=funky(3)) + theme_classic() + 
   labs(x=paste("PC1: ",sprintf("%.2f",(pca.out$eig[1]/sum(pca.out$eig))*100)," %", sep=""), y=paste("PC2: ",sprintf("%.2f",(pca.out$eig[2]/sum(pca.out$eig))*100)," %", sep="")) +
   guides(fill=guide_legend(title="Sites", override.aes = list(shape = 23))) + 
-  ggtitle(paste("Outlier data (n=",length(locNames(gen3.out))," loci)", sep=""))
-  stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(5)) + guides(color="none")
+  ggtitle(paste("Outlier data (n=",length(locNames(gen3.out))," loci)", sep="")) +
+  stat_ellipse(data=tmp.dat, aes(x=Axis1, y=Axis2, group=POP, col=POP)) + scale_color_manual(values=funky(3)) + guides(color="none")
 p.out_POP
 
-ggsave(p.out_POP, file="PCA_genout_POP_v2.svg", device="svg")
+ggsave(p.out_POP, file="PCA_genout_POP.svg", device="svg")
 
 ## DAPC ##
 #Neutral loci#
@@ -264,13 +265,11 @@ grp <- find.clusters(gen3,  max.n.clust=20, n.pca=400, method = "kmeans")
 X.net <- scaleGen(gen3, NA.method="mean", scale=F)
 
 tiff("Xval_grps_net_loci.tif", res=300, height =2000, width=2000)
-par(mfrow=c(3,1))
-xval.2.net <- xvalDapc(X.net, grp2$grp, n.pca.max = 300, training.set = 0.9, result = "groupMean", center = TRUE, scale = FALSE, n.pca = NULL, n.rep = 50, xval.plot = TRUE)
+par(mfrow=c(1,1))
+xval.2.net <- xvalDapc(X.net, grp$grp, n.pca.max = 300, training.set = 0.9, result = "groupMean", center = TRUE, scale = FALSE, n.pca = NULL, n.rep = 50, xval.plot = TRUE)
 dev.off()
 
 xval.2.net[2:6]
-xval.3.net[2:6]
-xval.4.net[2:6]
 
 #Composition plots
 ```{R}```
@@ -290,17 +289,28 @@ writeGenPop(gen3, "SNP.TRS.Final_net.gen", "Neutral C. bovinus data without dups
 ```{bash}```
 java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_net.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_net.arp -outputformat Arlequin -spid ~/bin/genepop_to_arlequin_STD.spid
 
-## Preparing the data tables ##
+# Pairwise estimate of Fst with confidence intervals
+```{bash}```
+pair.fst <- hierfstat::pairwise.WCfst(gen3)
+boot.sft <- hierfstat::boot.ppfst(gen3, pair.fst, nboot = 20000, quant = c(0.025, 0.975), diploid = TRUE)
+
+## Preparing the diversity data tables ##
 #Allelic Richness
 ```{R}```
 setPop(gen3) <- ~POP
 Ar_data.df <- allelic.richness(gen3)$Ar
 
-#Expected Heterozygosity (from Arelquin)
+#Expected Heterozygosity
 ```{R}```
-He_data.df <- read.table("He.csv", head=T, sep=",")
-rownames(He_data.df) <- He_data.df[,1]
-He_data.df <- He_data.df[,2:ncol(He_data.df)]
+locus.stats <- as.data.frame(get_locus_stats(gen3))
+tmp.loc <- unique(locus.stats$locus)
+tmp.KGS <- locus.stats[locus.stats$pop == "Cyb-FLS", c("locus","he")]
+tmp.Head <- locus.stats[locus.stats$pop == "Cyb-HEAD", c("locus","he")]
+tmp.USFW <- locus.stats[locus.stats$pop == "Cyb-USFW", c("locus","he")]
+He_data.df <- data.frame("Cyb-FLS"=tmp.KGS[match(tmp.loc, tmp.KGS$locus),"he"],
+"Cyb-HEAD"=tmp.Head[match(tmp.loc, tmp.Head$locus),"he"],
+"Cyb-USFW"=tmp.USFW[match(tmp.loc, tmp.USFW$locus),"he"],
+row.names=tmp.loc)
 
 ## Running the Friedmans ##
 #Will print the results to the screen
