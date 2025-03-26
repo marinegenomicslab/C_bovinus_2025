@@ -4,4 +4,4 @@ Genbank mtDNA: PV351395-PV351454<br/>
 NCBI BioProject: PRJNA1226595<br/>
 NCBI SRA:SAMN46944605 - SAMN46944716
 
-Scripts are best viewed in notepad++ (https://notepad-plus-plus.org/)
+Scripts are best viewed in notepad++ (https://notepad-plus-plus.org/). VCF files are available upon request from david.portnoy@tamucc.edu.
