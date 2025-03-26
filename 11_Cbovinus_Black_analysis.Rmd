@@ -62,11 +62,11 @@ VCF_remove <- function(genind.vcf, loci.list){
 
 #Importing Data
 ```{R}```
-strata <- read.csv(file = "SNP.TRS.F07.2023-05-16/indv.csv", header = TRUE)
+strata <- read.csv(file = "data/Temporal_indv.csv", header = TRUE)
 strata$POP2 <- strata$POP
 strata$POP2[strata$POP2 %in% c("Cyb-FLS","Cyb-HEAD")] <- "Cyb-DY"
 
-gen <- read.genepop(file = "SNP.TRS.F07.gen", ncode=3L, quiet = FALSE)
+gen <- read.genepop(file = "data/Temporal_data.gen", ncode=3L, quiet = FALSE)
 strata(gen) <- strata[match(indNames(gen),strata$INDV),]
 head(strata(gen))
 
@@ -111,7 +111,7 @@ for(i in names(gen.list)){
   tmp.gen <- gen.list[[i]]
   if(nInd(tmp.gen) < 10){next}
   tmp.rel <- get(paste(i,"rel",sep="_"))
-  rel.list <- rbind(rel.list, tmp.rel[tmp.rel$wang > 0.4,c(2,3,6)])
+  rel.list <- rbind(rel.list, tmp.rel[tmp.rel$wang > 0.3,c(2,3,6)])
   hist(tmp.rel$wang, breaks=tmp.break, col="red4", main=i, xlim=c(MIN,MAX), xlab="relatedness")
 }
 dev.off()
@@ -154,7 +154,7 @@ save(gen2, file="gen2.gz", commpress=T)
 #Fst Outliers (Bayescan)
 ```{R}```
 #Exporting data for Bayescan
-setPop(gen2) <- ~POP
+setPop(gen2) <- ~POP2
 writeGenPop(gen2, "Black.Final_all.gen", "Temporal C. bovinus data without dups by POP & Time")
 
 #Converting to BS format
@@ -164,7 +164,7 @@ java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile Black.Final_all.gen -inpu
 #Running Bayescan
 ```{bash}```
 mkdir Bayescan
-bayescan Black.Final_all.BS -od ./Bayescan -all-trace -threads 15 -thin 100 -nbp 30 -pr_odds 100
+bayescan Black.Final_all.BS -od ./Bayescan -all-trace -threads 15 -thin 50 -nbp 25 -n 35000 -pr_odds 100 -burn 200000
 
 #Analyzing results
 ```{bash}```
@@ -173,8 +173,6 @@ head -n2 ../SNP.TRS.Site2_all.gen | tail -n 1 | sed 's/, /\n/g' > contigs
 echo "Contigs" | cat - contigs > tmp; mv tmp contigs
 paste contigs SNP.TRS.Site2_al_fst.txt | awk 'NR==1{print $0}NR!=1{$2=""; print}' > fst_out.txt
 
-awk 'NR==1{next;} $4 < 0.05{print $0}' fst_out.txt | wc -l
-awk 'NR==1{print $0;next;} $4 < 0.05{print $0}' fst_out.txt | less
 awk 'NR==1{next;} $4 < 0.05' fst_out.txt | cut -f1 -d" "> Bayescan_Outliers.list
 
 #Gathering Outlier loci
@@ -184,7 +182,7 @@ BS.out <- read.table("Bayescan/Bayescan_Outliers.list", head=F)[,1]
 
 set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% BS.out))]
 gen3 <- gen2[, loc=set.loc]
-gen3.vcf <- VCF_remove(gen2.vcf, gen.out.list)
+gen3.vcf <- VCF_remove(gen2.vcf, BS.out)
 
 gen3.out <- gen2[, loc=BS.out]
 set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% BS.out))]
@@ -194,7 +192,7 @@ gen3.out.vcf <- VCF_remove(gen2.vcf, set.loc)
 ```{R}```
 X <- scaleGen(gen3, NA.method="mean", scale=F)
 pca1 <- dudi.pca(X,cent=T,scale=T,scannf=FALSE,nf=5000)
-setPop(gen3) <- ~POP
+setPop(gen3) <- ~POP2
 
 par(mfrow=c(1,1))
 tmp.dat <- cbind(gen3@strata, pca1$li[match(gen3@strata$INDV, rownames(pca1$li)),])
