@@ -233,6 +233,11 @@ writeGenPop(gen3, "Black.Final_net.gen", "Neutral C. bovinus data without dups b
 ```{bash}```
 java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile Black.Final_net.gen -inputformat GENEPOP -outputfile Black.Final_net.arp -outputformat Arlequin -spid ~/bin/genepop_to_arlequin_STD.spid
 
+# Pairwise estimate of Fst with confidence intervals
+```{bash}```
+pair.fst <- hierfstat::pairwise.WCfst(gen3)
+boot.sft <- hierfstat::boot.ppfst(gen3, pair.fst, nboot = 20000, quant = c(0.025, 0.975), diploid = TRUE)
+
 #Exporting for temporal Ne estimates
 ```{R}```
 #USFW samples
