@@ -63,7 +63,7 @@ VCF_remove <- function(genind.vcf, loci.list){
 
 #Importing Data
 ```{R}```
-strata <- read.csv(file = "SNP.TRS.F07.2022-03-10/indv.csv", header = TRUE)
+strata <- read.csv(file = "data/Pop_gen_indv.csv", header = TRUE)
 
 vcf <- read.vcfR(file="SNP.TRS.F07.vcf")
 gen.vcf<-vcfR2genind(vcf)
@@ -71,7 +71,7 @@ strata(gen.vcf) <- strata[match(indNames(gen.vcf),strata$INDV),]
 head(strata(gen.vcf))
 rm(vcf)
 
-gen <- read.genepop(file = "SNP.TRS.F07.gen", ncode=3L, quiet = FALSE)
+gen <- read.genepop(file = "Pop_gen_data.gen", ncode=3L, quiet = FALSE)
 strata(gen) <- strata[match(indNames(gen),strata$INDV),]
 head(strata(gen))
 
@@ -86,8 +86,6 @@ head(strata(gen))
 #Setting color schemes
 ```{R}```
 c2 <- c("darkorange3", "grey35")
-c3 <- c("red4", "mediumblue", "grey35")
-c4 <- c("mediumblue", "red4", "grey50", "grey35")
 
 #Relatedness within site
 ```{R}```
@@ -122,7 +120,7 @@ for(i in names(gen.list)){
   tmp.gen <- gen.list[[i]]
   if(nInd(tmp.gen) < 10){next}
   tmp.rel <- get(paste(i,"rel",sep="_"))
-  rel.list <- rbind(rel.list, tmp.rel[tmp.rel$wang > 0.4,c(2,3,6)])
+  rel.list <- rbind(rel.list, tmp.rel[tmp.rel$wang > 0.9,c(2,3,6)])
   hist(tmp.rel$wang, breaks=tmp.break, col="red4", main=i, xlim=c(MIN,MAX), xlab="relatedness")
 }
 dev.off()
@@ -161,23 +159,9 @@ save(gen2, file="gen2.gz", commpress=T)
 save(gen2.vcf, file="gen2.vcf.gz", commpress=T)
 #load("gen2.vcf.gz")
 
-#Outlier Detection (Outflank)
-```{R}```
-setPop(gen2.vcf) <- ~POP
-tmp <- gl.outflank(gen2.vcf, qthreshold = 0.1)
-length(which(tmp$outflank$results[15]=="TRUE" & tmp$outflank$results[11]=="goodH"))
-
-outliers <- tmp$outflank$results[which(tmp$outflank$results[15]=="TRUE" & tmp$outflank$results[11]=="goodH"),1]
-out.list <- matrix(unlist(strsplit(as.vector(outliers),"[.]")),ncol=2,byrow=T)[,1]
-tmp <- matrix(unlist(strsplit(as.vector(outliers),"[_]")),ncol=4,byrow=T)
-gen.out.list<-unique(paste(tmp[,1],tmp[,2],tmp[,3],sep="_"))
-length(gen.out.list) 
-
-write.table(gen.out.list, "Outflank_outlier.list", quote=F, col.names=F, row.names=F)
-
 #Fst Outliers (Bayescan)
-```{R}```
 #Exporting data for Bayescan
+```{R}```
 setPop(gen2) <- ~POP
 writeGenPop(gen2, "SNP.TRS.Final_all.gen", "C. bovinus data without dups by POP")
 
@@ -192,32 +176,22 @@ bayescan SNP.TRS.Final_all.BS -od ./Bayescan2 -all-trace -threads 15 -thin 100 -
 
 #Analyzing results
 ```{bash}```
-#All sites
 head -n2 ../SNP.TRS.Final_all.gen | tail -n 1 | sed 's/, /\n/g' > contigs
 echo "Contigs" | cat - contigs > tmp; mv tmp contigs
 paste contigs SNP.TRS.Final_al_fst.txt | awk 'NR==1{print $0}NR!=1{$2=""; print}' > fst_out.txt
-
-awk 'NR==1{next;} $4 < 0.05{print $0}' fst_out.txt | wc -l
-awk 'NR==1{print $0;next;} $4 < 0.05{print $0}' fst_out.txt | less
 awk 'NR==1{next;} $4 < 0.05' fst_out.txt | cut -f1 -d" "> Bayescan_Outliers.list
 
 #Gathering Outlier loci
 ```{R}```
 setPop(gen2) <- ~POP
-
-#Outlier Loci
-OF.out <- read.table("Outflank_outlier.list", head=F)[,1]
 BS.out <- read.table("Bayescan/Bayescan_Outliers.list", head=F)[,1]
 
-out.list <- unique(c(OF.out, BS.out))
-length(out.list)
-
-set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% out.list))]
+set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% BS.out))]
 gen3 <- gen2[, loc=set.loc]
-gen3.vcf <- VCF_remove(gen2.vcf, gen.out.list)
+gen3.vcf <- VCF_remove(gen2.vcf, BS.out)
 
-gen3.out <- gen2[, loc=out.list]
-set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% out.list))]
+gen3.out <- gen2[, loc=BS.out]
+set.loc <- locNames(gen2)[which(!(locNames(gen2) %in% BS.out))]
 gen3.out.vcf <- VCF_remove(gen2.vcf, set.loc)
 
 #PCA
@@ -256,8 +230,8 @@ ggsave(p.out_POP, file="PCA_genout_POP.svg", device="svg")
 
 ## DAPC ##
 #Neutral loci#
-```{R}```
 #Looking at groups
+```{R}```
 grp <- find.clusters(gen3,  max.n.clust=20, n.pca=400, method = "kmeans")
 
 #DAPC Cross Validation
@@ -273,16 +247,16 @@ xval.2.net[2:6]
 
 #Composition plots
 ```{R}```
-tmp <- data.frame(grp2$grp)[match(gen3@strata$INDV,names(grp2$grp)),]
+tmp <- data.frame(grp$grp)[match(gen3@strata$INDV,names(grp$grp)),]
 gen3@strata$G2 <- as.numeric(tmp)
+setPop(gen3) <- ~POP
 
 p2.comp<-ggcompoplot(xval.2.net$DAPC, gen3, pal = c2, cols=3) + theme(axis.text.x = element_blank()) + ggtitle("K-means 2 Groups")
-
 p2.comp
 
 #Exporting for NeEstimator and Arleqiun
 ```{R}```
-setPop(gen3)<-~POP
+setPop(gen3) <- ~POP
 writeGenPop(gen3, "SNP.TRS.Final_net.gen", "Neutral C. bovinus data without dups by POP")
 
 #Convert to Arlequin format
