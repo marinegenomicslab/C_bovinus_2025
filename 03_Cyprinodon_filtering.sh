@@ -112,6 +112,3 @@ ls *.bam | while read i; do echo "Processing $i"; samtools index $i; done
 cp -s ../SNP.TRS.F05.recode.vcf .
 
 rad_haplotyper.pl -v SNP.TRS.F05.recode.vcf -r reference.fasta -p popmap -x 20 -m 0.8 -o SNP.TRS.F06.vcf -g SNP.TRS.F06.gen
-
-#strata updated by hand in excel
-#indv.csv in SNP.TRS.F04.FIL.2023-01-09 updated
